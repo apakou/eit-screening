@@ -27,8 +27,8 @@ critères : il propose, l'humain tranche, et les deux décisions sont conservée
 | `src/eit_screening/synthetic/` | Fait. Dossiers fictifs avec anomalies connues d'avance |
 | `src/eit_screening/screening/eligibility.py` | Fait. Constats d'éligibilité, paramètres dans `eligibility.toml` |
 | `src/eit_screening/screening/assessment_match.py` | Fait. Appariement avec l'export du test, paramètres dans `assessment.toml` |
-| Anonymisation | À faire ensuite |
-| Indexation, recherche, verdict, API, interface, évaluation | À faire ensuite |
+| `src/eit_screening/privacy/anonymize.py` | Fait. Anonymisation en trois couches, pseudonymes, paramètres dans `anonymize.toml` |
+| Pièces jointes et vidéos, indexation, recherche, verdict, API, interface, évaluation | À faire ensuite |
 
 Le détail des étapes et leurs critères d'acceptation sont dans
 `docs/feuille-de-route.md`. Les décisions déjà prises et les points à confirmer
@@ -39,11 +39,12 @@ une nouvelle étape.
 
 ```bash
 pip install -e ".[dev]"                             # installation
-pytest                                              # tests (environ 45 s)
+pytest                                              # tests (environ 1 min)
 eit-generate -n 40 --graine 2026 -o data/fictifs    # cohorte fictive de référence
 eit-import data/fictifs/dossiers/0000001007/application.pdf -o dossier.json
 eit-eligibility data/fictifs/dossiers --scenarios data/fictifs/scenarios.csv -o data/resultats/eligibilite.json
 eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scenarios data/fictifs/scenarios.csv -o data/resultats/appariement.json
+eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
 ```
 
 ## Règles sur les données
@@ -56,7 +57,10 @@ eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scena
   Tout le reste (lecture des PDF, transcription, embeddings, recherche) tourne
   en local.
 - Le genre, l'âge et la nationalité servent aux contrôles d'éligibilité et aux
-  filtres, jamais au texte envoyé au modèle de langage.
+  filtres, jamais au texte envoyé au modèle de langage. Pour la même raison, les
+  pays, villes, nationalités et langues locales sont masqués dans ce texte
+  (`[PAYS]`, `[VILLE]`…) ; seuls les noms d'établissements et d'employeurs du
+  dossier sont gardés tels quels.
 - Le pseudonyme d'un candidat est un identifiant aléatoire. La table de
   correspondance est stockée à part ; ne jamais dériver le pseudonyme du numéro
   de candidature.

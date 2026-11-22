@@ -21,6 +21,7 @@ Les étapes 1 à 3 n'utilisent aucun modèle de langage. Elles se font en premie
   export du test, scénarios.
 - **1. Contrôles d'éligibilité** (`screening/eligibility.py`) : voir ci-dessous.
 - **2. Appariement avec l'export du test** (`screening/assessment_match.py`) : voir ci-dessous.
+- **3. Anonymisation** (`privacy/anonymize.py`) : voir ci-dessous.
 
 ## 1. Contrôles d'éligibilité
 
@@ -123,6 +124,55 @@ Module proposé : `privacy/anonymize.py`. Dépendances : Microsoft Presidio, spa
 Acceptation : un test de fuite parcourt les 40 dossiers anonymisés et ne trouve
 aucun nom, e-mail ni téléphone figurant dans les `reference.json`.
 
+**Fait.** Test de fuite (`test_no_leak_in_reference_cohort`) : aucun nom, e-mail,
+téléphone ni lien LinkedIn de `reference.json` dans les 40 dossiers anonymisés,
+noms de fichiers compris. Le détecteur est écrit à part du module ; il trouve une
+fuite dans chacun des 40 dossiers bruts (`test_detector_finds_leaks_in_raw_dossiers`).
+Commande :
+
+```bash
+eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+```
+
+Masquage en quatre couches : identifiants donnés par le dossier (candidat,
+parrain, références), motifs (e-mail, téléphone, lien), lieux (pays, villes,
+nationalités, langues locales), reconnaissance des noms de personnes et des
+lieux inconnus (Presidio, modèle spaCy `en_core_web_md` 3.8.0). Sur la cohorte :
+134 mentions du candidat, 5 de tiers, 39 e-mails, 39 téléphones, 39 liens,
+238 pays, 39 villes et 3 langues masqués ; la reconnaissance d'entités ne
+masque rien (la cohorte ne cite ni tiers ni lieu inconnus du dossier).
+
+Lieux (décision du 22 novembre 2026) : le modèle ne doit pas pouvoir déduire la
+nationalité. Pays, villes, nationalités et langues locales deviennent `[PAYS]`,
+`[VILLE]`, `[NATIONALITÉ]`, `[LANGUE]` ; un lieu repéré par la reconnaissance
+d'entités devient `[LIEU]`. Le modèle voit toujours qu'un lieu précis est cité,
+ce qui distingue une réponse personnelle d'une réponse générique. Les noms
+d'établissements et d'employeurs déclarés dans le dossier sont gardés (option
+`keep_organisations`) : sur la cohorte, aucun lieu déclaré ne reste dans le
+texte libre (`test_no_declared_place_outside_kept_organisations`), mais 10
+dossiers sur 40 le laissent lire dans un nom d'établissement (« University of
+Ghana », « University of Lagos »). Le biais résiduel est à mesurer à l'étape 10
+par un test contrefactuel : changer le pays d'un dossier et vérifier que le
+verdict ne bouge pas.
+
+Limites :
+
+- **Faux positifs de la reconnaissance d'entités.** Sans filtre, elle masquait
+  83 passages sur la cohorte, tous à tort (entreprises, universités, pays). Elle
+  écarte désormais ce que le dossier nomme comme lieu, organisation, poste ou
+  formation, et une liste de mots techniques (`allow_list`). Elle n'est vérifiée
+  que sur des cas construits à la main : son rappel sur de vrais CV reste à
+  mesurer.
+- **Masquage par excès.** Un mot du nom d'une personne est masqué partout :
+  « Kwame Nkrumah University » devient « [PERSONNE_2] Nkrumah University » si
+  une référence s'appelle Kwame.
+- **Langue.** Le modèle est anglais ; un CV en français serait moins bien
+  traité par la troisième couche.
+- **Liste des lieux.** Les pays, villes et langues masqués sans la
+  reconnaissance d'entités viennent d'une liste (`anonymize.toml`) et des lieux
+  déclarés dans le dossier. Une petite ville absente de la liste dépend de la
+  reconnaissance d'entités, dont le rappel n'est pas mesuré.
+
 ## 4. Pièces jointes et vidéos
 
 - Lire les pièces jointes avec Docling, OCR compris pour les pages marquées
@@ -180,6 +230,8 @@ vérifiées mesuré et exporté.
 ## 10. Évaluation
 
 - Mesures décrites dans `docs/cadrage.md`, lancées par une commande unique.
+- Test contrefactuel de biais : changer le pays (et les lieux) d'un même dossier
+  et vérifier que le verdict proposé ne change pas.
 - Export des résultats avec date, version du code, modèle et graine.
 
 ## Amélioration à prévoir avant le test avec les évaluateurs

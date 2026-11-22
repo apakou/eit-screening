@@ -1,0 +1,116 @@
+# Paramètres de l'anonymisation du texte destiné au modèle de langage.
+
+[labels]
+# Marques qui remplacent les données masquées. {n} numérote les tiers d'un dossier.
+candidate = "[CANDIDAT]"
+person = "[PERSONNE_{n}]"
+email = "[EMAIL]"
+phone = "[TÉLÉPHONE]"
+url = "[LIEN]"
+
+[places]
+# Masquage des lieux : pays, villes et nationalités sont remplacés par une marque,
+# pour que le modèle ne puisse pas déduire la nationalité du candidat.
+# Le modèle voit toujours qu'un lieu précis est cité.
+enabled = true
+country_label = "[PAYS]"
+city_label = "[VILLE]"
+nationality_label = "[NATIONALITÉ]"
+# Lieu repéré par la reconnaissance d'entités, sans savoir s'il s'agit d'un pays ou d'une ville.
+place_label = "[LIEU]"
+# Langues locales : elles désignent un pays aussi sûrement qu'une ville.
+# L'anglais et le français ne sont pas masqués.
+language_label = "[LANGUE]"
+# Garder intacts les noms d'établissements et d'employeurs déclarés dans le
+# dossier, même s'ils contiennent un lieu (« University of Ghana »). Ils
+# renseignent le critère « CV et expérience » ; en contrepartie, ils laissent
+# souvent deviner le pays.
+keep_organisations = true
+# Lieux que la reconnaissance d'entités ne doit pas masquer : ils ne disent rien
+# de la nationalité du candidat.
+allow_list = ["Africa", "West Africa", "East Africa", "Sub-Saharan Africa", "Afrique", "Afrique de l'Ouest", "Sahel", "Europe"]
+
+# Comparaison sans casse ni accents : « Senegal » couvre « Sénégal ».
+countries = [
+    # Afrique de l'Ouest (noms anglais et français)
+    "Benin", "Burkina Faso", "Cabo Verde", "Cape Verde", "Cap-Vert", "Côte d'Ivoire", "Ivory Coast",
+    "Gambia", "Gambie", "Ghana", "Guinea", "Guinée", "Guinea-Bissau", "Guinée-Bissau", "Liberia",
+    "Mali", "Mauritania", "Mauritanie", "Niger", "Nigeria", "Senegal", "Sierra Leone", "Togo",
+    # Reste de l'Afrique
+    "Algeria", "Algérie", "Angola", "Botswana", "Burundi", "Cameroon", "Cameroun",
+    "Central African Republic", "Centrafrique", "Chad", "Tchad", "Comoros", "Comores", "Congo",
+    "Democratic Republic of the Congo", "DRC", "RDC", "Djibouti", "Egypt", "Égypte",
+    "Equatorial Guinea", "Guinée équatoriale", "Eritrea", "Érythrée", "Eswatini", "Swaziland",
+    "Ethiopia", "Éthiopie", "Gabon", "Kenya", "Lesotho", "Libya", "Libye", "Madagascar", "Malawi",
+    "Mauritius", "Maurice", "Morocco", "Maroc", "Mozambique", "Namibia", "Namibie", "Rwanda",
+    "São Tomé and Príncipe", "Sao Tomé-et-Principe", "Seychelles", "Somalia", "Somalie",
+    "South Africa", "Afrique du Sud", "South Sudan", "Soudan du Sud", "Sudan", "Soudan",
+    "Tanzania", "Tanzanie", "Tunisia", "Tunisie", "Uganda", "Ouganda", "Zambia", "Zambie",
+    "Zimbabwe",
+    # Pays où un candidat a souvent étudié ou travaillé
+    "United Kingdom", "UK", "Royaume-Uni", "England", "United States", "USA", "États-Unis",
+    "Canada", "France", "Germany", "Allemagne", "Belgium", "Belgique", "China", "Chine", "India",
+    "Inde", "Turkey", "Turquie",
+]
+
+nationalities = [
+    "Beninese", "Béninois", "Béninoise", "Burkinabe", "Burkinabè", "Cape Verdean", "Cap-Verdien",
+    "Ivorian", "Ivoirien", "Ivoirienne", "Gambian", "Gambien", "Ghanaian", "Ghanéen", "Ghanéenne",
+    "Guinean", "Guinéen", "Guinéenne", "Bissau-Guinean", "Liberian", "Libérien", "Malian", "Malien",
+    "Malienne", "Mauritanian", "Mauritanien", "Nigerien", "Nigérien", "Nigérienne", "Nigerian",
+    "Nigérian", "Nigériane", "Senegalese", "Sénégalais", "Sénégalaise", "Sierra Leonean",
+    "Togolese", "Togolais", "Togolaise", "Cameroonian", "Camerounais", "Camerounaise", "Kenyan",
+    "Rwandan", "Rwandais", "Ethiopian", "Éthiopien", "Ugandan", "Tanzanian", "Congolese",
+    "Congolais", "Gabonese", "Gabonais", "Chadian", "Tchadien", "Moroccan", "Marocain", "Egyptian",
+    "South African", "Sudanese", "Somali", "Zambian", "Zimbabwean", "Malawian", "Angolan",
+]
+
+cities = [
+    # Afrique de l'Ouest
+    "Accra", "Kumasi", "Tamale", "Takoradi", "Sekondi", "Cape Coast", "Koforidua", "Sunyani", "Tema",
+    "Lagos", "Abuja", "Kano", "Ibadan", "Port Harcourt", "Enugu", "Benin City", "Kaduna", "Jos",
+    "Ilorin", "Abeokuta", "Owerri", "Calabar", "Warri", "Onitsha", "Uyo", "Akure", "Ile-Ife",
+    "Dakar", "Thiès", "Saint-Louis", "Touba", "Ziguinchor", "Kaolack", "Mbour", "Rufisque",
+    "Abidjan", "Bouaké", "Yamoussoukro", "San-Pédro", "Daloa", "Korhogo",
+    "Lomé", "Kara", "Sokodé", "Kpalimé", "Atakpamé", "Tsévié", "Aného",
+    "Cotonou", "Porto-Novo", "Parakou", "Abomey", "Abomey-Calavi", "Bohicon", "Natitingou",
+    "Ouagadougou", "Bobo-Dioulasso", "Koudougou", "Bamako", "Sikasso", "Ségou", "Mopti", "Kayes",
+    "Freetown", "Kenema", "Makeni", "Banjul", "Serekunda", "Monrovia", "Conakry", "Kankan",
+    "Nzérékoré", "Niamey", "Zinder", "Maradi", "Nouakchott", "Praia", "Bissau",
+    # Reste de l'Afrique et ailleurs
+    "Nairobi", "Mombasa", "Kigali", "Kampala", "Addis Ababa", "Dar es Salaam", "Douala",
+    "Yaoundé", "Libreville", "Kinshasa", "Brazzaville", "Johannesburg", "Cape Town", "Cairo",
+    "Casablanca", "Rabat", "Tunis", "Algiers", "Alger", "London", "Londres", "Paris", "Lyon",
+    "Brussels", "Bruxelles", "Montreal", "Montréal", "Toronto", "New York", "Berlin",
+]
+
+languages = [
+    "Twi", "Akan", "Fante", "Ga", "Ewe", "Dagbani", "Yoruba", "Igbo", "Hausa", "Pidgin", "Wolof",
+    "Serer", "Dioula", "Jula", "Baoulé", "Bété", "Mina", "Kabiyè", "Fon", "Bariba",
+    "Mooré", "Mossi", "Bambara", "Songhai", "Krio", "Temne", "Mende", "Mandinka",
+    "Kpelle", "Bassa", "Pular", "Fula", "Fulfulde", "Peul", "Soussou", "Malinké", "Zarma",
+    "Tamasheq", "Kabuverdianu", "Swahili", "Kiswahili", "Amharic", "Kinyarwanda", "Lingala",
+]
+
+[ner]
+# Dernière couche : repérage des noms de personnes inconnus du dossier
+# (personnes citées dans le CV ou les réponses) par Presidio et spaCy.
+enabled = true
+language = "en"
+# Modèle installé par pyproject.toml (en_core_web_md 3.8.0, licence MIT).
+model = "en_core_web_md"
+min_score = 0.6
+# Mots que le modèle prend parfois pour des noms de personnes et qui n'en sont
+# pas. Comparaison sans casse. Un nom réel ajouté ici ne serait plus masqué.
+# Un passage qui contient l'un de ces mots est gardé.
+allow_list = [
+    "Django", "Flask", "FastAPI", "React", "Native", "Node", "Java", "Kotlin",
+    "Flutter", "Laravel", "Figma", "Canva", "Tableau", "Excel", "Power BI",
+    "Firebase", "Jupyter", "Hackathon", "Finalist", "University", "Université",
+    "Resume", "CV", "Certificate", "Evidence",
+]
+
+[table]
+# Table de correspondance numéro de dossier -> pseudonyme. Elle doit rester
+# hors du dépôt et hors du dossier de sortie. « ~ » désigne le dossier personnel.
+default_path = "~/.local/share/eit-screening/pseudonymes.json"

@@ -13,6 +13,10 @@ dependencies = [
     "reportlab>=4.0",
     "pillow>=10.1",
     "rapidfuzz>=3.6",
+    "presidio-analyzer>=2.2",
+    "spacy>=3.8,<3.9",
+    # Modèle spaCy pour la reconnaissance des noms (licence MIT, environ 55 Mo).
+    "en_core_web_md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl",
 ]
 
 [project.optional-dependencies]
@@ -23,12 +27,13 @@ eit-import = "eit_screening.ingestion.smapply_pdf:main"
 eit-generate = "eit_screening.synthetic.generate:main"
 eit-eligibility = "eit_screening.screening.eligibility:main"
 eit-assessment = "eit_screening.screening.assessment_match:main"
+eit-anonymize = "eit_screening.privacy.anonymize:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-eit_screening = ["synthetic/*.json", "screening/*.toml"]
+eit_screening = ["synthetic/*.json", "screening/*.toml", "privacy/*.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

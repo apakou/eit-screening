@@ -47,6 +47,11 @@ Le code doit donc produire ses premiers chiffres avant le 6 décembre.
   restent à choisir. Condition : seul du texte anonymisé lui est envoyé.
 - **Données.** Par défaut, dossiers fictifs produits par `eit-generate`. De
   vrais dossiers pourront s'ajouter si MEST les fournit, sans changer le code.
+- **Lieux masqués** (22 novembre 2026). Pays, villes, nationalités et langues
+  locales sont masqués dans le texte envoyé au modèle, pour qu'il ne puisse pas
+  déduire la nationalité. Les noms d'établissements et d'employeurs sont gardés
+  pour le critère CV ; ils laissent parfois deviner le pays, et ce biais résiduel
+  sera mesuré par un test contrefactuel.
 - **Honnêteté du mémoire.** Le texte distingue ce qui est construit et mesuré de
   ce qui est seulement conçu.
 

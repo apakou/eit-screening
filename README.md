@@ -2,7 +2,7 @@
 
 Prototype d'aide à la présélection des candidatures du MEST AI Startup Program.
 
-Cette version contient quatre briques :
+Cette version contient cinq briques :
 
 - **l'import** : lit un dossier exporté en PDF depuis SurveyMonkey Apply et le
   transforme en données structurées ;
@@ -13,10 +13,12 @@ Cette version contient quatre briques :
   d'éligibilité, sous forme de constats soumis à l'évaluateur ;
 - **l'appariement avec le test** : rattache chaque ligne de l'export de la
   plateforme de test au bon dossier et relève les tests introuvables, en retard
-  ou trop rapides.
+  ou trop rapides ;
+- **l'anonymisation** : produit, pour chaque dossier, le texte destiné au
+  modèle de langage sans données personnelles, sous un pseudonyme aléatoire.
 
-Les étapes suivantes (anonymisation, indexation, recherche, notation, interface)
-viendront s'appuyer sur ces briques.
+Les étapes suivantes (pièces jointes et vidéos, indexation, recherche, notation,
+interface) viendront s'appuyer sur ces briques.
 
 ## Installation
 
@@ -103,6 +105,39 @@ Les paramètres sont dans `src/eit_screening/screening/assessment.toml` : noms
 des colonnes et format de l'export (supposés), date limite, durée minimale,
 seuil de ressemblance des noms. Quand MEST fournira un vrai export, seul ce
 fichier devrait changer.
+
+## Anonymiser les dossiers
+
+```bash
+eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+```
+
+Pour chaque dossier, le module rassemble les textes utiles à l'évaluation
+(réponses libres, transcriptions, pièces jointes, formation, expériences, noms
+de fichiers) et y masque les données personnelles en quatre couches :
+
+1. les identifiants que le dossier donne lui-même, pour le candidat et les tiers
+   (parrain, références) : nom, chaque mot du nom, e-mails, téléphones, liens ;
+2. toute autre adresse e-mail, numéro de téléphone ou lien ;
+3. les pays, villes, nationalités et langues locales, pour que le modèle ne
+   puisse pas déduire la nationalité ;
+4. les noms de personnes et les lieux inconnus du dossier, repérés par Presidio
+   et spaCy.
+
+Le candidat devient `[CANDIDAT]`, les tiers `[PERSONNE_1]`, `[PERSONNE_2]`…, les
+lieux `[PAYS]`, `[VILLE]`, `[NATIONALITÉ]`, `[LANGUE]` ou `[LIEU]`. Les noms
+d'établissements et d'employeurs déclarés dans le dossier sont gardés tels quels
+(« University of Ghana ») : ils renseignent le parcours, mais laissent parfois
+deviner le pays. Le genre, l'âge et la nationalité sont gardés comme
+métadonnées, à côté du texte.
+Chaque dossier est écrit sous un pseudonyme aléatoire (`C-1A2B3C4D.json`), sans
+son numéro de candidature. La table de correspondance est écrite à part, avec
+des droits de lecture réservés à l'utilisateur ; le module refuse de la placer
+dans le dossier de sortie. Relancer l'anonymisation garde les mêmes pseudonymes.
+
+Les paramètres sont dans `src/eit_screening/privacy/anonymize.toml`. Le modèle
+spaCy `en_core_web_md` (licence MIT, environ 55 Mo) est installé par
+`pip install -e ".[dev]"`.
 
 ## Générer des dossiers fictifs
 
