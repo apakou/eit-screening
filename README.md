@@ -2,7 +2,7 @@
 
 Prototype d'aide à la présélection des candidatures du MEST AI Startup Program.
 
-Cette version contient cinq briques :
+Cette version contient six briques :
 
 - **l'import** : lit un dossier exporté en PDF depuis SurveyMonkey Apply et le
   transforme en données structurées ;
@@ -14,19 +14,26 @@ Cette version contient cinq briques :
 - **l'appariement avec le test** : rattache chaque ligne de l'export de la
   plateforme de test au bon dossier et relève les tests introuvables, en retard
   ou trop rapides ;
+- **les pièces jointes et les vidéos** : relit les CV et certificats (OCR
+  compris) et transcrit les vidéos, avec l'horodatage de chaque segment ;
 - **l'anonymisation** : produit, pour chaque dossier, le texte destiné au
   modèle de langage sans données personnelles, sous un pseudonyme aléatoire.
 
-Les étapes suivantes (pièces jointes et vidéos, indexation, recherche, notation,
-interface) viendront s'appuyer sur ces briques.
+Les étapes suivantes (indexation, recherche, notation, interface) viendront
+s'appuyer sur ces briques.
 
 ## Installation
 
-Python 3.11 ou plus récent.
+Python 3.11 ou plus récent, FFmpeg installé sur la machine.
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu
 ```
+
+L'index supplémentaire installe PyTorch (requis par Docling) en version
+processeur. Sans lui, pip installe la version CUDA, qui pèse plusieurs
+gigaoctets. Les modèles de Docling, de RapidOCR et de Whisper sont téléchargés
+au premier usage puis gardés en cache.
 
 ## Importer un dossier
 
@@ -106,6 +113,36 @@ des colonnes et format de l'export (supposés), date limite, durée minimale,
 seuil de ressemblance des noms. Quand MEST fournira un vrai export, seul ce
 fichier devrait changer.
 
+## Lire les pièces jointes et transcrire les vidéos
+
+```bash
+eit-media data/fictifs/dossiers -o data/resultats/extraction.json
+```
+
+Pour chaque dossier, le module écrit `extraction.json` à côté du PDF :
+
+- **pièces jointes** : les pages ajoutées après le formulaire (CV, certificats)
+  sont relues par Docling. Les pages scannées passent par l'OCR (RapidOCR par
+  défaut, Tesseract en option). Chaque page garde son numéro et l'origine de
+  son texte (`docling` ou `ocr`) ;
+- **vidéos** : FFmpeg extrait l'audio, faster-whisper le transcrit sur le
+  processeur. Chaque segment garde son début, sa fin et les valeurs de confiance
+  de Whisper.
+
+L'export ne contient que des liens protégés vers les vidéos : le module ne les
+télécharge pas. Il cherche la vidéo à côté du PDF, sous le nom
+`personal_statement.mp4` ou `assessment_reflection.mp4` (autres extensions
+admises dans `media.toml`). À défaut, il lit la transcription écrite
+(`personal_statement.txt`), comme pour les dossiers fictifs ; ses segments
+n'ont alors pas d'horodatage.
+
+`eit-anonymize` lit `extraction.json` s'il existe. Le texte issu de l'OCR ou de
+la reconnaissance vocale y passe par une couche de plus : un mot qui ressemble
+à un nom du dossier (« Mensa » pour « Mensah ») est masqué, car un nom mal lu
+échappe à la comparaison exacte.
+
+Les paramètres sont dans `src/eit_screening/media/media.toml`.
+
 ## Anonymiser les dossiers
 
 ```bash
@@ -136,8 +173,7 @@ des droits de lecture réservés à l'utilisateur ; le module refuse de la place
 dans le dossier de sortie. Relancer l'anonymisation garde les mêmes pseudonymes.
 
 Les paramètres sont dans `src/eit_screening/privacy/anonymize.toml`. Le modèle
-spaCy `en_core_web_md` (licence MIT, environ 55 Mo) est installé par
-`pip install -e ".[dev]"`.
+spaCy `en_core_web_md` (licence MIT, environ 55 Mo) est installé avec le projet.
 
 ## Générer des dossiers fictifs
 
@@ -153,6 +189,7 @@ La même graine redonne toujours la même cohorte.
 | `dossiers/<numéro>/reference.json` | Données exactes ayant servi à fabriquer le PDF |
 | `dossiers/<numéro>/personal_statement.txt` | Transcription de la vidéo de présentation |
 | `dossiers/<numéro>/assessment_reflection.txt` | Transcription de la vidéo de réflexion |
+| `dossiers/<numéro>/pieces_jointes.json` | Texte attendu de chaque certificat, pour mesurer l'OCR |
 | `assessment_results.csv` | Export de la plateforme de test |
 | `scenarios.csv` | Niveau et anomalie de chaque dossier, adresse de sa ligne dans l'export du test (`email_test`) |
 
@@ -185,6 +222,19 @@ pytest
 
 Les tests génèrent 40 dossiers, les relisent avec le module d'import et
 vérifient que chaque champ relu est identique à la référence.
+
+Les tests de l'étape 4 chargent de vrais modèles : Docling sur un dossier, et
+Whisper « small » (environ 460 Mo, téléchargé au premier lancement) sur une
+courte vidéo dont la voix est synthétisée par FFmpeg. Ils demandent un FFmpeg
+compilé avec le filtre `flite` (c'est le cas du paquet Ubuntu). Durée totale :
+environ 2 minutes.
+
+Contrôle de fuite sur toute la cohorte anonymisée (code indépendant du module
+d'anonymisation) :
+
+```bash
+eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+```
 
 L'import a aussi été vérifié sur un dossier réel de la cohorte 2026 : 73
 questions lues, aucun avertissement. Ce dossier n'est pas dans le dépôt.

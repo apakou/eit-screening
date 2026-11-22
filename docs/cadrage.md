@@ -97,6 +97,9 @@ garde ces valeurs paramétrables.
 - **Date de calcul de l'âge** (hypothèse : 1er janvier 2026) et **liste des
   pays** retenue pour « Afrique de l'Ouest » (hypothèse : les 16 pays de l'ONU).
 - **Accord écrit de MEST** pour l'envoi de texte anonymisé à un modèle hébergé.
+- **Accès aux vidéos.** L'export ne contient que des liens protégés. Le module
+  attend les vidéos à côté du PDF (`personal_statement.mp4`,
+  `assessment_reflection.mp4`) ; reste à savoir comment MEST peut les fournir.
 - **Vérité terrain.** Aucun dossier ne porte aujourd'hui de note ni de décision
   d'évaluateur. Il faut faire noter les dossiers fictifs par deux évaluateurs ou
   anciens de MEST, ou obtenir des dossiers réels avec leurs décisions.

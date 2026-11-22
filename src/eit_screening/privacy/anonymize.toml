@@ -110,6 +110,18 @@ allow_list = [
     "Resume", "CV", "Certificate", "Evidence",
 ]
 
+[noisy]
+# Texte issu de l'OCR (certificats scannés) ou de la reconnaissance vocale : un
+# nom peut y être mal lu (« Mensa » pour « Mensah »). Un mot qui ressemble à un
+# mot de nom du dossier au-dessus de ce seuil (0 à 100) est masqué. Les mots plus
+# courts que min_length ne sont comparés qu'à l'identique.
+name_threshold = 85
+min_length = 4
+# Même comparaison pour les pays et villes d'un seul mot, à partir de 5 lettres
+# pour épargner les mots anglais courts. Nationalités et langues n'y passent
+# pas : trop proches de mots courants (« librarian » et « Liberian »).
+place_min_length = 5
+
 [table]
 # Table de correspondance numéro de dossier -> pseudonyme. Elle doit rester
 # hors du dépôt et hors du dossier de sortie. « ~ » désigne le dossier personnel.

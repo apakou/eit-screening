@@ -5,7 +5,8 @@ Pour chaque candidat :
 - ``application.pdf``           dossier au format de l'export SurveyMonkey Apply ;
 - ``reference.json``            données exactes ayant servi à fabriquer le PDF ;
 - ``personal_statement.txt``    transcription de la vidéo de présentation ;
-- ``assessment_reflection.txt`` transcription de la vidéo de réflexion.
+- ``assessment_reflection.txt`` transcription de la vidéo de réflexion ;
+- ``pieces_jointes.json``       texte attendu des pièces jointes (mesure de l'OCR).
 
 Et pour la cohorte :
 
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 from pathlib import Path
 
 from .profiles import ANOMALIES, Dossier, build_cohort
@@ -31,6 +33,24 @@ SCENARIO_COLUMNS = [
 ]
 
 
+def _attachments_truth(dossier: Dossier) -> list[dict]:
+    """Texte attendu de chaque page de pièce jointe, connu par construction (mesure de l'OCR)."""
+    app = dossier.application
+    name = f"{app.personal.first_name} {app.personal.last_name}"
+    page = app.form_page_count + 1
+    truth: list[dict] = []
+    if dossier.resume is not None:
+        truth.append({"page_number": page, "kind": "resume", "as_image": False})
+        page += 1
+    for certificate in dossier.certificates:
+        title = certificate.title.upper() if certificate.as_image else certificate.title
+        lines = [title, "This certificate is presented to", name, f"for {certificate.subject}",
+                 f"Issued in {certificate.issued}"]
+        truth.append({"page_number": page, "kind": "certificate", "as_image": certificate.as_image, "lines": lines})
+        page += 1
+    return truth
+
+
 def write_cohort(dossiers: list[Dossier], out_dir: str | Path) -> Path:
     """Écrit tous les fichiers d'une cohorte et renvoie le dossier de sortie."""
     out_dir = Path(out_dir)
@@ -42,6 +62,9 @@ def write_cohort(dossiers: list[Dossier], out_dir: str | Path) -> Path:
         (folder / "reference.json").write_text(app.model_dump_json(indent=2), encoding="utf-8")
         (folder / "personal_statement.txt").write_text(dossier.personal_statement + "\n", encoding="utf-8")
         (folder / "assessment_reflection.txt").write_text(dossier.reflection + "\n", encoding="utf-8")
+        (folder / "pieces_jointes.json").write_text(
+            json.dumps(_attachments_truth(dossier), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     with (out_dir / "assessment_results.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=ASSESSMENT_COLUMNS)

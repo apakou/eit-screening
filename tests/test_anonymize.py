@@ -3,12 +3,17 @@
 import json
 import re
 import stat
-import unicodedata
 
 import pytest
 
 from eit_screening.models import Application, Education, Essay, Personal, Reference, WorkExperience
-from eit_screening.synthetic import content as C
+from eit_screening.privacy.leak_check import (
+    declared_places,
+    leaks,
+    place_found,
+    strings,
+    without_organisations,
+)
 from eit_screening.privacy.anonymize import (
     PseudonymTable,
     anonymize_dossier,
@@ -18,51 +23,6 @@ from eit_screening.privacy.anonymize import (
 )
 
 CONFIG = load_config()
-
-# --------------------------------------------------------------------------
-# Détecteur de fuite : code indépendant du module testé
-# --------------------------------------------------------------------------
-
-
-def _fold(text):
-    text = unicodedata.normalize("NFKD", text)
-    return "".join(c for c in text if not unicodedata.combining(c)).casefold()
-
-
-def _strings(value):
-    """Toutes les chaînes d'un JSON relu (clés comprises), pour chercher hors des échappements."""
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for key, item in value.items():
-            yield key
-            yield from _strings(item)
-    elif isinstance(value, list):
-        for item in value:
-            yield from _strings(item)
-
-
-def leaks(text, reference):
-    """Noms, e-mails, téléphones et liens de ``reference.json`` retrouvés dans ``text``."""
-    folded = _fold(text)
-    person = reference["personal"]
-    names = [person["first_name"], person["last_name"], person.get("referrer_name")]
-    names += [r["full_name"] for r in reference["references"]]
-    found = []
-    for name in filter(None, names):
-        for token in re.split(r"[\s-]+", _fold(name)):
-            if len(token) >= 2 and re.search(rf"(?<![^\W\d_]){re.escape(token)}(?![^\W\d_])", folded):
-                found.append(token)
-    emails = [person["email"], person.get("referrer_email"), reference["applicant_email"]]
-    emails += [r["email"] for r in reference["references"]]
-    found += [e for e in filter(None, emails) if _fold(e) in folded]
-    digits = re.sub(r"[\s.()+-]", "", folded)
-    phones = [person["phone"], person.get("referrer_phone")] + [r["phone"] for r in reference["references"]]
-    found += [p for p in filter(None, phones) if re.sub(r"\D", "", p) in digits]
-    if person.get("linkedin_url") and _fold(person["linkedin_url"]) in folded:
-        found.append(person["linkedin_url"])
-    return found
-
 
 # --------------------------------------------------------------------------
 # Cohorte de référence anonymisée une fois pour tout le module
@@ -94,7 +54,7 @@ def test_no_leak_in_reference_cohort(cohort, anonymized):
         app_id = dossier.application.application_id
         reference = json.loads((out_dir / "dossiers" / app_id / "reference.json").read_text(encoding="utf-8"))
         path = target / f"{table.entries[app_id]}.json"
-        content = "\n".join([path.name, *_strings(json.loads(path.read_text(encoding="utf-8")))])
+        content = "\n".join([path.name, *strings(json.loads(path.read_text(encoding="utf-8")))])
         assert leaks(content, reference) == [], app_id
         assert app_id not in content
 
@@ -133,29 +93,6 @@ def test_nothing_masked_by_ner_alone_on_cohort(anonymized):
         assert not [key for key in replacements if key.startswith("ner:")], path.name
 
 
-def _declared_places(reference):
-    """Lieux connus par construction : nationalité, résidence, sa ville et sa langue, lieux d'études et de travail."""
-    person = reference["personal"]
-    places = [person["country_of_citizenship"], person["country_of_residence"], person["interview_city"]]
-    places += [e["location"] for e in reference["education"]] + [x["location"] for x in reference["experience"]]
-    _, city, language, _ = C.COUNTRIES[person["country_of_residence"]]
-    return [p for p in dict.fromkeys(places + [city, language]) if p and p != "Other"]
-
-
-def _without_organisations(text, reference):
-    folded = _fold(text)
-    names = [e["institution_other"] or e["institution"] for e in reference["education"]]
-    names += [x["organisation"] for x in reference["experience"]]
-    for name in filter(None, names):
-        folded = folded.replace(_fold(name), " ")
-    return folded
-
-
-def _place_found(place, folded):
-    words = re.findall(r"[^\W_]+", _fold(place))
-    return re.search(r"(?<![^\W\d_])" + r"[\W_]+".join(map(re.escape, words)) + r"(?![^\W\d_])", folded)
-
-
 def test_no_declared_place_outside_kept_organisations(cohort, anonymized):
     """Pays, ville et langue du candidat ne restent que dans les noms d'établissements gardés."""
     out_dir, dossiers = cohort
@@ -164,8 +101,8 @@ def test_no_declared_place_outside_kept_organisations(cohort, anonymized):
         app_id = dossier.application.application_id
         reference = json.loads((out_dir / "dossiers" / app_id / "reference.json").read_text(encoding="utf-8"))
         data = json.loads((target / f"{table.entries[app_id]}.json").read_text(encoding="utf-8"))
-        text = _without_organisations("\n".join(t["text"] for t in data["texts"]), reference)
-        assert [p for p in _declared_places(reference) if _place_found(p, text)] == [], app_id
+        text = without_organisations("\n".join(t["text"] for t in data["texts"]), reference)
+        assert [p for p in declared_places(reference) if place_found(p, text)] == [], app_id
 
 
 def test_raw_dossiers_name_their_places(cohort, parsed):
@@ -177,8 +114,8 @@ def test_raw_dossiers_name_their_places(cohort, parsed):
         reference = json.loads((out_dir / "dossiers" / app_id / "reference.json").read_text(encoding="utf-8"))
         raw = [e.answer or "" for e in app.essays] + [p.text for p in app.attachment_pages]
         raw += list(read_transcripts(out_dir / "dossiers" / app_id).values())
-        text = _without_organisations("\n".join(raw), reference)
-        assert any(_place_found(p, text) for p in _declared_places(reference)), app_id
+        text = without_organisations("\n".join(raw), reference)
+        assert any(place_found(p, text) for p in declared_places(reference)), app_id
 
 
 # --------------------------------------------------------------------------

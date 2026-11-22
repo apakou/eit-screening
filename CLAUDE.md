@@ -28,7 +28,8 @@ critères : il propose, l'humain tranche, et les deux décisions sont conservée
 | `src/eit_screening/screening/eligibility.py` | Fait. Constats d'éligibilité, paramètres dans `eligibility.toml` |
 | `src/eit_screening/screening/assessment_match.py` | Fait. Appariement avec l'export du test, paramètres dans `assessment.toml` |
 | `src/eit_screening/privacy/anonymize.py` | Fait. Anonymisation en trois couches, pseudonymes, paramètres dans `anonymize.toml` |
-| Pièces jointes et vidéos, indexation, recherche, verdict, API, interface, évaluation | À faire ensuite |
+| `src/eit_screening/media/` | Fait. Pièces jointes (Docling, OCR) et vidéos (FFmpeg, faster-whisper), paramètres dans `media.toml` |
+| Indexation, recherche, verdict, API, interface, évaluation | À faire ensuite |
 
 Le détail des étapes et leurs critères d'acceptation sont dans
 `docs/feuille-de-route.md`. Les décisions déjà prises et les points à confirmer
@@ -38,13 +39,15 @@ une nouvelle étape.
 ## Commandes
 
 ```bash
-pip install -e ".[dev]"                             # installation
-pytest                                              # tests (environ 1 min)
+pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu   # installation (PyTorch CPU)
+pytest                                              # tests (environ 2 min)
 eit-generate -n 40 --graine 2026 -o data/fictifs    # cohorte fictive de référence
 eit-import data/fictifs/dossiers/0000001007/application.pdf -o dossier.json
 eit-eligibility data/fictifs/dossiers --scenarios data/fictifs/scenarios.csv -o data/resultats/eligibilite.json
 eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scenarios data/fictifs/scenarios.csv -o data/resultats/appariement.json
+eit-media data/fictifs/dossiers -o data/resultats/extraction.json            # OCR et transcriptions (environ 10 min)
 eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
 ```
 
 ## Règles sur les données

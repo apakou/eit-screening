@@ -122,6 +122,8 @@ class AttachmentPage(BaseModel):
     text: str = ""
     needs_ocr: bool = False
     image_count: int = 0
+    # pdf : texte lu par l'import ; docling : relu par Docling ; ocr : reconnu sur l'image.
+    text_source: Literal["pdf", "docling", "ocr"] = "pdf"
 
 
 class Application(BaseModel):

@@ -22,6 +22,7 @@ Les étapes 1 à 3 n'utilisent aucun modèle de langage. Elles se font en premie
 - **1. Contrôles d'éligibilité** (`screening/eligibility.py`) : voir ci-dessous.
 - **2. Appariement avec l'export du test** (`screening/assessment_match.py`) : voir ci-dessous.
 - **3. Anonymisation** (`privacy/anonymize.py`) : voir ci-dessous.
+- **4. Pièces jointes et vidéos** (`media/`) : voir ci-dessous.
 
 ## 1. Contrôles d'éligibilité
 
@@ -182,6 +183,59 @@ Limites :
 
 Acceptation : le texte des certificats en image est récupéré ; la transcription
 garde l'horodatage des segments.
+
+**Fait.** Commande :
+
+```bash
+eit-media data/fictifs/dossiers -o data/resultats/extraction.json
+```
+
+Pièces jointes, sur la cohorte de référence (Docling, OCR RapidOCR, processeur) :
+40 certificats en image, similarité moyenne 97,6/100 avec le texte attendu
+(`pieces_jointes.json`, écrit par le générateur) ; 149 lignes sur 200 lues à
+l'identique ; le nom du candidat est lu à l'identique dans 35 certificats sur
+40, et chacun de ses mots, dans n'importe quel ordre, dans 39 sur 40 (l'OCR
+inverse parfois prénom et nom ; le 40e lit « iOuattara »). Les 21 certificats en texte sont lus à 100/100.
+Environ 11 s par dossier. Les images sont propres et générées : ce taux est
+acquis en bonne partie par construction et ne dit rien des scans réels.
+
+Transcription : FFmpeg extrait l'audio, faster-whisper (modèle « small »,
+processeur) le transcrit ; chaque segment garde son début, sa fin et les valeurs
+de confiance de Whisper. Vérifié sur une vidéo dont la voix est synthétisée par
+FFmpeg (`test_transcription_keeps_timestamps`) : deux phrases séparées par un
+silence donnent au moins deux segments horodatés, dans l'ordre. Les
+dossiers fictifs n'ont pas de vidéo : leurs transcriptions sont lues dans les
+fichiers `.txt`, sans horodatage (aucun n'est inventé). L'horodatage n'est donc
+démontré que sur la vidéo synthétique.
+
+Anonymisation du texte obtenu : `eit-anonymize` lit `extraction.json`. Le texte
+issu de l'OCR ou de la voix passe par une couche de plus, qui masque les mots
+proches d'un nom du dossier, ou d'un pays ou d'une ville (seuil 85/100). Les
+nationalités et langues n'y passent pas, trop proches de mots courants
+(« librarian » et « Liberian »). Contrôle sur la cohorte relue par l'OCR, avec un
+code indépendant du module d'anonymisation :
+
+```bash
+eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+```
+
+Résultat : aucune fuite de nom, e-mail, téléphone ou lien (0/40), aucun lieu
+déclaré dans le texte libre (0/40). Le contrôle liste aussi les mots « suspects »
+du texte OCR ou transcrit, proches d'un nom ou d'un lieu (seuil 75) : 6 dossiers,
+dont 2 vrais (« Lomø ») et 4 faux (« hello », « name », « seen »…).
+
+Limites :
+
+- **Lieu mal lu.** L'OCR lit « Lomø » pour « Lomé » dans 2 dossiers ; le mot est
+  trop éloigné (75/100) pour être masqué et le détecteur exact ne le voit pas.
+- **Nom mal entendu.** Avec le modèle « tiny », Whisper entend « Gofima » pour
+  « Kofi Mensah » : aucune comparaison ne le rattache au nom. La reconnaissance
+  d'entités l'a masqué par chance. Avec « small », il entend « Kofi Mensa »,
+  masqué par la couche approchée. Le taux de noms mal entendus n'est pas mesuré.
+- **Vidéos réelles.** L'export ne contient que des liens protégés ; le module ne
+  les télécharge pas et attend la vidéo à côté du PDF (`personal_statement.mp4`).
+- **Incompatibilité contournée.** faster-whisper 1.2.1 ne lit pas l'audio avec
+  PyAV 19 ; le module lit lui-même le WAV produit par FFmpeg.
 
 ## 5. Découpage et indexation
 

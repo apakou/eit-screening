@@ -42,6 +42,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .. import __version__
+from ..media.transcribe import Transcript
 from ..models import Application
 from ..screening.common import git_commit
 from ..screening.eligibility import age_on
@@ -83,6 +84,14 @@ class PlaceRule(BaseModel):
     languages: list[str] = Field(default_factory=list)
 
 
+class NoisyRule(BaseModel):
+    """Texte issu de l'OCR ou de la reconnaissance vocale : un nom ou un lieu peut y être mal lu."""
+
+    name_threshold: float = 85
+    min_length: int = 4
+    place_min_length: int = 5
+
+
 class TableRule(BaseModel):
     default_path: str
 
@@ -90,6 +99,7 @@ class TableRule(BaseModel):
 class AnonymizeConfig(BaseModel):
     labels: Labels = Field(default_factory=Labels)
     places: PlaceRule = Field(default_factory=PlaceRule)
+    noisy: NoisyRule = Field(default_factory=NoisyRule)
     ner: NerRule = Field(default_factory=NerRule)
     table: TableRule
 
@@ -136,7 +146,7 @@ URL_PATTERN = re.compile(r"(?:https?://|www\.)[^\s<>\"']+", re.IGNORECASE)
 PHONE_PATTERN = re.compile(r"(?<![\w+])\+?\d(?:[\s.()-]?\d){8,14}(?!\w)")
 
 Kind = Literal["candidate", "person", "email", "phone", "url", "country", "city", "nationality", "language", "place", "keep"]
-Layer = Literal["dossier", "pattern", "place", "ner"]
+Layer = Literal["dossier", "approx", "pattern", "place", "ner"]
 
 
 @dataclass
@@ -359,6 +369,27 @@ def _known_non_persons(app: Application) -> list[str]:
     return sorted(v for v in folded if v)
 
 
+def _noisy_place_tokens(app: Application, rule: PlaceRule) -> list[tuple[str, Kind, str]]:
+    """Pays et villes d'un seul mot, comparés par ressemblance dans le texte issu de l'OCR ou de la voix.
+
+    Nationalités et langues en sont exclues : trop proches de mots courants
+    (« librarian » et « Liberian », « server » et « Serer »).
+    """
+    person = app.personal
+    declared = _clean([person.country_of_residence, person.country_of_citizenship, person.interview_city]
+                      + [e.location for e in app.education] + [x.location for x in app.experience])
+    tokens: dict[str, tuple[Kind, str]] = {}
+    for values, kind, label in (
+        (rule.countries + declared, "country", rule.country_label),
+        (rule.cities, "city", rule.city_label),
+    ):
+        for value in values:
+            words = re.findall(r"[^\W\d_]+", _fold_plain(value))
+            if len(words) == 1 and words[0] != "other":
+                tokens.setdefault(words[0], (kind, label))
+    return [(word, kind, label) for word, (kind, label) in tokens.items()]
+
+
 class Masker:
     """Masque les données personnelles d'un dossier dans n'importe quel texte.
 
@@ -382,6 +413,15 @@ class Masker:
         self._next_person = sum(1 for p in self.people if p.kind == "person") + 1
         self._allow = {_fold_plain(word) for word in config.ner.allow_list}
         self._not_person = _known_non_persons(app)
+        self._noisy_tokens = [
+            (token, identity.kind, identity.label)
+            for identity in self.people
+            for name in identity.names
+            for token in _name_tokens(name)
+            if len(token) >= config.noisy.min_length
+        ]
+        self._noisy_places = _noisy_place_tokens(app, places) if places.enabled else []
+        self.approx_strings: list[str] = []  # mots masqués par ressemblance (OCR, transcription)
         self.counts: dict[str, int] = {}
         self.ner_strings: list[str] = []  # noms masqués par la seule reconnaissance d'entités
         self.ner_places: list[str] = []  # lieux masqués par la seule reconnaissance d'entités
@@ -447,17 +487,57 @@ class Masker:
         self._count("ner", [(kind, found) for _, _, kind, _, found in kept])
         return text
 
-    def mask(self, text: str | None) -> str:
-        """Texte sans les données personnelles connues ou repérées."""
+    def _approximate(
+        self, text: str, tokens: list[tuple[str, Kind, str]], min_length: int, skip_exact: bool = False
+    ) -> str:
+        """Masque les mots proches d'un mot connu (« Mensa » pour « Mensah »).
+
+        ``skip_exact`` : un mot identique est laissé tel quel ; pour les lieux, il a
+        déjà été masqué par la couche exacte, ou protégé dans un nom d'établissement.
+        """
+        from rapidfuzz import fuzz
+
+        threshold = self.config.noisy.name_threshold
+        pieces, last, masked = [], 0, []
+        for match in re.finditer(r"[^\W\d_]+", text):
+            word = match.group(0)
+            inside_label = text[max(0, match.start() - 1):match.start()] == "["  # « [CANDIDAT] », « [PERSONNE_1] »
+            if inside_label or len(word) < min_length:
+                continue
+            folded = _fold_plain(word)
+            best = max(((fuzz.ratio(folded, token), kind, label) for token, kind, label in tokens), default=None)
+            if best is None or best[0] < threshold or (skip_exact and best[0] >= 100):
+                continue
+            pieces.append(text[last:match.start()] + best[2])
+            last = match.end()
+            masked.append((best[1], word))
+            self.approx_strings.append(word)
+        pieces.append(text[last:])
+        self._count("approx", masked)
+        return "".join(pieces)
+
+    def mask(self, text: str | None, noisy: bool = False) -> str:
+        """Texte sans les données personnelles connues ou repérées.
+
+        ``noisy`` : texte issu de l'OCR ou de la reconnaissance vocale. Les mots
+        proches d'un nom du dossier y sont aussi masqués, car un nom mal lu
+        échappe à la comparaison exacte.
+        """
         if not text:
             return text or ""
         text, masked = _apply(text, self._dossier_rules)
         self._count("dossier", masked)
+        if noisy:
+            text = self._approximate(text, self._noisy_tokens, self.config.noisy.min_length)
         text, masked = _apply(text, self._pattern_rules)
         self._count("pattern", masked)
         if self._place_rules:
             text, masked = _apply(text, self._place_rules)
             self._count("place", masked)
+            if noisy:
+                text = self._approximate(
+                    text, self._noisy_places, self.config.noisy.place_min_length, skip_exact=True
+                )
         if self.config.ner.enabled:
             text = self._ner(text)
         return text
@@ -482,6 +562,9 @@ class AnonymizedText(BaseModel):
     ]
     label: str | None = None
     page: int | None = None
+    # Horodatage d'un segment de transcription, en secondes (None si inconnu).
+    start: float | None = None
+    end: float | None = None
     text: str
 
 
@@ -519,10 +602,15 @@ def _experience_text(app: Application) -> list[str]:
 def anonymize_dossier(
     app: Application,
     pseudonym: str,
-    transcripts: dict[str, str] | None = None,
+    transcripts: dict[str, str | Transcript] | None = None,
     config: AnonymizeConfig | None = None,
 ) -> tuple[AnonymizedDossier, Masker]:
-    """Construit le dossier anonymisé. Le ``Masker`` renvoyé garde les détails, à ne pas exporter."""
+    """Construit le dossier anonymisé. Le ``Masker`` renvoyé garde les détails, à ne pas exporter.
+
+    Une transcription horodatée donne un texte par segment, avec son début et
+    sa fin. Le texte issu de l'OCR ou de la reconnaissance vocale est masqué
+    avec la couche approchée (noms mal lus).
+    """
     config = config or load_config()
     masker = Masker(app, config)
     texts: list[AnonymizedText] = []
@@ -531,11 +619,25 @@ def anonymize_dossier(
         texts.append(AnonymizedText(section="essay", label=essay.question, text=masker.mask(essay.answer)))
     for section in ("personal_statement", "assessment_reflection"):
         transcript = (transcripts or {}).get(section)
-        if transcript:
-            texts.append(AnonymizedText(section=section, text=masker.mask(transcript.strip())))
+        if isinstance(transcript, str):
+            if transcript.strip():
+                texts.append(AnonymizedText(section=section, text=masker.mask(transcript.strip())))
+        elif transcript is not None:
+            noisy = transcript.source == "faster-whisper"
+            if any(segment.start is not None for segment in transcript.segments):
+                for segment in transcript.segments:
+                    texts.append(
+                        AnonymizedText(
+                            section=section, start=segment.start, end=segment.end,
+                            text=masker.mask(segment.text, noisy=noisy),
+                        )
+                    )
+            elif transcript.text:
+                texts.append(AnonymizedText(section=section, text=masker.mask(transcript.text, noisy=noisy)))
     for page in app.attachment_pages:
         if page.text.strip():
-            texts.append(AnonymizedText(section="attachment", page=page.page_number, text=masker.mask(page.text)))
+            text = masker.mask(page.text, noisy=page.text_source == "ocr")
+            texts.append(AnonymizedText(section="attachment", page=page.page_number, text=text))
     for line in _education_text(app):
         texts.append(AnonymizedText(section="education", text=masker.mask(line)))
     for line in _experience_text(app):
@@ -667,6 +769,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     from ..ingestion.smapply_pdf import parse_application
+    from ..media.extract import load_extraction
 
     config = load_config(args.config)
     table_path = (args.table or Path(config.table.default_path)).expanduser()
@@ -688,12 +791,21 @@ def main(argv: list[str] | None = None) -> int:
     }
     print(f"{'Pseudonyme':<12} {'Textes':>6}  " + " ".join(f"{g:>8}" for g in groups) + f"  {'dont NER':>8}  Lieu déclaré resté")
     totals: dict[str, int] = {}
+    used_extraction = 0
     outside, only_in_organisations = 0, 0
-    ner_details: list[tuple[str, list[str], list[str]]] = []
+    ner_details: list[tuple[str, list[str], list[str], list[str]]] = []
     for path in paths:
         app = parse_application(path)
         pseudonym = table.pseudonym(app.application_id)
-        dossier, masker = anonymize_dossier(app, pseudonym, read_transcripts(path.parent), config)
+        extraction = load_extraction(path.parent)
+        if extraction is not None:
+            # Pièces jointes relues par Docling (OCR compris) et transcriptions horodatées.
+            app = app.model_copy(update={"attachment_pages": extraction.attachment_pages})
+            transcripts = dict(extraction.transcripts)
+            used_extraction += 1
+        else:
+            transcripts = read_transcripts(path.parent)
+        dossier, masker = anonymize_dossier(app, pseudonym, transcripts, config)
         (args.out / f"{pseudonym}.json").write_text(dossier.model_dump_json(indent=2), encoding="utf-8")
 
         counts = {
@@ -707,8 +819,11 @@ def main(argv: list[str] | None = None) -> int:
         outside += bool(free)
         only_in_organisations += bool(in_orgs) and not free
         state = "oui" if free else ("dans un nom d'établissement" if in_orgs else "non")
-        if masker.ner_strings or masker.ner_places:
-            ner_details.append((pseudonym, sorted(set(masker.ner_strings)), sorted(set(masker.ner_places))))
+        if masker.ner_strings or masker.ner_places or masker.approx_strings:
+            ner_details.append((
+                pseudonym, sorted(set(masker.ner_strings)), sorted(set(masker.ner_places)),
+                sorted(set(masker.approx_strings)),
+            ))
         print(
             f"{pseudonym:<12} {len(dossier.texts):>6}  " + " ".join(f"{counts[g]:>8}" for g in groups)
             + f"  {ner:>8}  {state}"
@@ -716,6 +831,7 @@ def main(argv: list[str] | None = None) -> int:
     table.save()
 
     print(f"\n{len(paths)} dossiers anonymisés dans {args.out} ; table de correspondance : {table_path}.")
+    print(f"Dossiers lus avec extraction.json (OCR, transcriptions) : {used_extraction}/{len(paths)}.")
     print("Remplacements par couche et par type : " + ", ".join(f"{k} {v}" for k, v in sorted(totals.items())))
     print(
         "Lieux déclarés dans le dossier (nationalité, résidence, lieux d'études et de travail, ville d'entretien) "
@@ -723,8 +839,8 @@ def main(argv: list[str] | None = None) -> int:
         f"{only_in_organisations}/{len(paths)} seulement dans un nom d'établissement ou d'employeur gardé."
     )
     if args.details:
-        for pseudonym, names, places in ner_details:
-            print(f"  {pseudonym} (NER seule) : personnes {names or '-'} ; lieux {places or '-'}")
+        for pseudonym, names, places, approx in ner_details:
+            print(f"  {pseudonym} : NER personnes {names or '-'} ; NER lieux {places or '-'} ; ressemblance {approx or '-'}")
 
     summary = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),

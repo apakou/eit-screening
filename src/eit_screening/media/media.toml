@@ -1,0 +1,27 @@
+# Paramètres de la lecture des pièces jointes et de la transcription des vidéos.
+# Tout tourne en local : aucun fichier ne quitte la machine.
+
+[attachments]
+# Moteur d'OCR de Docling : "auto" (RapidOCR, modèles PP-OCR, licence Apache-2.0),
+# "rapidocr" ou "tesseract" (Tesseract installé sur la machine, langue anglaise).
+ocr_engine = "auto"
+tesseract_languages = ["eng"]
+
+[transcription]
+# Modèle faster-whisper (Systran, licence MIT), téléchargé une fois depuis
+# Hugging Face puis gardé en cache. Multilingue : les candidats parlent anglais
+# avec des accents variés, parfois français. "small" est un compromis entre
+# justesse et temps de calcul sur processeur.
+model = "small"
+compute_type = "int8"
+# Langue imposée ("en", "fr") ou vide pour la détection automatique.
+language = ""
+beam_size = 5
+
+[videos]
+# Convention : la vidéo est posée à côté de application.pdf sous ce nom, avec
+# l'une de ces extensions. L'export ne contient que des liens protégés vers les
+# vidéos ; le module ne les télécharge jamais.
+personal_statement = "personal_statement"
+assessment_reflection = "assessment_reflection"
+extensions = [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4a", ".mp3", ".wav"]
