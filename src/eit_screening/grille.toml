@@ -1,0 +1,48 @@
+# Grille d'évaluation de la présélection.
+#
+# ATTENTION : cette grille vient du mémoire, pas d'un document de MEST. Le guide
+# d'évaluation de MEST (repères de notation, liste complète des Concerns) reste
+# à obtenir ; voir docs/cadrage.md. Modifier ce fichier, pas le code.
+#
+# « query » est la requête de recherche envoyée au dossier du candidat pour ce
+# critère (en anglais, comme les dossiers).
+
+total_points = 40
+
+[[criteria]]
+key = "resume_technical"
+name = "Resume & Technical Experience"
+max_points = 10
+query = "Education, technical skills, programming languages, software projects built and professional work experience."
+
+[[criteria]]
+key = "entrepreneurial_vision"
+name = "Entrepreneurial Motivation & Vision"
+max_points = 10
+query = "Why the candidate wants to become an entrepreneur, the product they want to build, the problem it solves and for whom."
+
+[[criteria]]
+key = "communication"
+name = "Communication & Clarity"
+max_points = 10
+query = "Clear, specific and personal explanations with concrete facts, numbers and examples from the candidate's own experience."
+
+[[criteria]]
+key = "program_fit"
+name = "Program Fit & Collaboration"
+max_points = 10
+query = "Teamwork, leadership, collaborating with others, resilience after setbacks and readiness for an intensive startup program."
+
+# Concerns : 8 selon le mémoire, dont 3 seulement sont nommés. Les autres
+# restent à obtenir de MEST.
+[[concerns]]
+key = "assessment_not_found"
+name = "Assessment not found"
+
+[[concerns]]
+key = "assessment_concerns"
+name = "Assessment concerns"
+
+[[concerns]]
+key = "generic_ai_responses"
+name = "Generic AI responses"

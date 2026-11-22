@@ -24,6 +24,7 @@ Les étapes 1 à 3 n'utilisent aucun modèle de langage. Elles se font en premie
 - **3. Anonymisation** (`privacy/anonymize.py`) : voir ci-dessous.
 - **4. Pièces jointes et vidéos** (`media/`) : voir ci-dessous.
 - **5. Découpage et indexation** (`search/`) : voir ci-dessous.
+- **6. Recherche hybride et re-ranking** (`search/retrieve.py`) : construit et mesuré ; critère non atteint, voir ci-dessous.
 
 ## 1. Contrôles d'éligibilité
 
@@ -294,6 +295,76 @@ Limites :
 
 Acceptation : pour un jeu de questions dont la réponse est connue par
 construction, le bon passage figure parmi les trois premiers.
+
+**Construit et mesuré ; critère non atteint.** Commande :
+
+```bash
+eit-search-eval --qdrant-url http://127.0.0.1:6333 -o data/resultats/recherche.json
+```
+
+Jeu de questions (`search/questions.toml`, figé avant la première mesure) :
+10 questions reformulées, posées dans chacun des 40 dossiers, 395 questions en
+tout (5 dossiers sans certificat). Les passages pertinents se déduisent de la
+structure du dossier : réponse libre visée, transcription, page du CV,
+certificat. Les 5 questions sur les réponses libres n'ont qu'une réponse par
+dossier : ce sont les questions « strictes ».
+
+| Chaîne | Rang 1 | 3 premiers | MRR | 3 premiers, questions strictes |
+|---|---|---|---|---|
+| Dense (bge-m3) | 71,1 % | 94,9 % | 0,832 | 90,5 % |
+| Lexicale (bge-m3, poids creux) | 48,1 % | 70,6 % | 0,618 | 50,0 % |
+| Hybride (fusion RRF) | 66,1 % | 90,9 % | 0,787 | 83,5 % |
+| Hybride + re-ranking (bge-reranker-v2-m3) | 57,7 % | 86,6 % | 0,725 | 74,0 % |
+| Tirage au hasard | | 31,2 % | | 24,9 % |
+
+Les passages pertinents figurent parmi les 10 candidats transmis au re-ranking
+dans 99,8 % des cas ; un dossier compte environ 12 passages, si bien que le
+re-ranking réordonne presque tout le dossier. 53 échecs pour la chaîne complète,
+dont 25 sur la question « unconventional ». Les échecs touchent plus les
+dossiers riches (20 % des questions des dossiers « fort ») que les réponses
+génériques (0 %). Durée : 39 minutes sur processeur pour les 395 questions.
+
+Constats :
+
+- **Aucune chaîne n'atteint le critère** : la meilleure, la recherche dense
+  seule, place un passage pertinent dans les 3 premiers pour 94,9 % des
+  questions.
+- **La fusion avec la recherche lexicale dégrade la recherche dense** sur ces
+  questions reformulées, qui partagent peu de mots avec les réponses.
+- **Le re-ranking dégrade encore.** Exemple : pour « Has the candidate solved a
+  problem in an unusual or creative way? », il classe en tête les passages qui
+  contiennent `[CANDIDAT]` (présentation, CV), avec des scores tous négatifs ;
+  la réponse visée finit 8e. Le diagnostic ci-dessous désigne surtout la
+  formulation de la question.
+- **Le jeu de questions est strict** : une autre réponse libre peut répondre
+  aussi (un récit de leadership décrit souvent une solution originale) ; elle
+  compte ici comme un échec.
+
+Diagnostic exploratoire, sur la seule question « unconventional », hors mesure
+officielle (script ponctuel, à reprendre en commande si le mémoire le cite) :
+la chaîne complète passe de 15 à 27 dossiers sur 40 avec une autre formulation
+(« Solving a problem in an unusual or creative way. » : plus de « the
+candidate », et une affirmation au lieu d'une question ; les candidats de la
+fusion changent aussi), et seulement de 15 à 19 quand la marque `[CANDIDAT]` est
+cachée au re-ranking. L'effet tient donc surtout à la formulation des
+requêtes. La recherche dense seule en trouve 29 sur 40 avec la question
+d'origine.
+
+Ce qui est construit et reste à décider :
+
+- `Retriever.for_criteria` : une requête par critère de la grille
+  (`grille.toml`), limitée au dossier du candidat ; ces requêtes n'ont pas de
+  vérité terrain et ne sont pas mesurées.
+- **Décision prise le 22 novembre 2026, en l'absence de l'auteur** (il avait
+  demandé de poursuivre sans attendre) : le verdict utilise la recherche dense
+  seule (`search.toml`, `retrieval.mode = "dense"`), la meilleure chaîne
+  mesurée. L'hybride et le re-ranking restent dans le code et dans la mesure ;
+  remettre `mode = "hybrid_rerank"` pour suivre le cadrage d'origine.
+- Les ex aequo de la fusion RRF revenaient dans un ordre arbitraire (deux
+  mesures identiques donnaient 90,9 % et 91,1 %) : les candidats sont
+  maintenant triés par score puis par identifiant.
+- bge-m3 et le re-ranking ne tiennent pas ensemble en mémoire sur la machine de
+  développement : les requêtes sont encodées d'abord, puis bge-m3 est libéré.
 
 ## 7. Verdict et raisons
 

@@ -22,3 +22,26 @@ batch_size = 8
 url = ""
 path = "data/qdrant-local"
 collection = "passages"
+
+[retrieval]
+# Chaîne utilisée pour le verdict : dense, sparse, hybrid ou hybrid_rerank.
+# Décision du 22 novembre 2026, sur la mesure de l'étape 6 (eit-search-eval) :
+# la recherche dense seule place le bon passage dans les 3 premiers pour 94,9 %
+# des questions, contre 90,9 % pour l'hybride et 86,6 % avec re-ranking.
+# Le cadrage prévoyait hybrid_rerank : remettre cette valeur pour y revenir.
+mode = "dense"
+# Candidats pris dans chaque recherche (dense, lexicale) avant la fusion RRF.
+prefetch_limit = 20
+# Candidats après fusion, transmis au re-ranking.
+candidates = 10
+# Passages gardés par requête au bout de la chaîne.
+top_k = 3
+
+[reranking]
+# BAAI/bge-reranker-v2-m3 (licence Apache-2.0), en pleine précision : la
+# demi-précision est plus lente sur processeur.
+enabled = true
+model = "BAAI/bge-reranker-v2-m3"
+revision = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
+max_tokens = 512
+batch_size = 8

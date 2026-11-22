@@ -27,6 +27,13 @@ dependencies = [
     "huggingface-hub>=0.24",
     "transformers>=4.44",
     "torch>=2.4",
+    # Client du modèle de langage (protocole compatible OpenAI).
+    "httpx>=0.27",
+    # API et base de données.
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
@@ -41,12 +48,18 @@ eit-anonymize = "eit_screening.privacy.anonymize:main"
 eit-leak-check = "eit_screening.privacy.leak_check:main"
 eit-media = "eit_screening.media.extract:main"
 eit-index = "eit_screening.search.index:main"
+eit-search = "eit_screening.search.evaluate:main_criteria"
+eit-search-eval = "eit_screening.search.evaluate:main"
+eit-verdict = "eit_screening.verdict.run:main"
+eit-api = "eit_screening.api.app:main"
+eit-api-load = "eit_screening.api.load:main"
+eit-evaluate = "eit_screening.evaluation.report:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-eit_screening = ["synthetic/*.json", "screening/*.toml", "privacy/*.toml", "media/*.toml", "search/*.toml"]
+eit_screening = ["grille.toml", "synthetic/*.json", "screening/*.toml", "privacy/*.toml", "media/*.toml", "search/*.toml", "verdict/*.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

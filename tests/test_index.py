@@ -4,9 +4,7 @@ import re
 
 import pytest
 
-from eit_screening.privacy.anonymize import AnonymizedDossier, AnonymizedText, Metadata, anonymize_dossier
-from eit_screening.privacy.anonymize import load_config as load_anonymize_config
-from eit_screening.privacy.anonymize import read_transcripts
+from eit_screening.privacy.anonymize import AnonymizedDossier, AnonymizedText, Metadata
 from eit_screening.search.chunking import chunk_dossier, passage_text
 from eit_screening.search.config import ChunkingRule, load_config
 from eit_screening.search.embed import BgeM3, Embedding, lexical_score
@@ -31,21 +29,6 @@ class FakeEmbedder:
             )
             for text in texts
         ]
-
-
-@pytest.fixture(scope="module")
-def anonymized_cohort(cohort, parsed):
-    out_dir, dossiers = cohort
-    config = load_anonymize_config()
-    config.ner.enabled = False  # le découpage ne dépend pas de la reconnaissance d'entités
-    result = []
-    for number, dossier in enumerate(dossiers):
-        app_id = dossier.application.application_id
-        anonymized, _ = anonymize_dossier(
-            parsed[app_id], f"C-{number:08X}", read_transcripts(out_dir / "dossiers" / app_id), config
-        )
-        result.append(anonymized)
-    return result
 
 
 def _store(tmp_path=None):

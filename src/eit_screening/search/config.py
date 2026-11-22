@@ -5,6 +5,7 @@ from __future__ import annotations
 import tomllib
 from importlib import resources
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -34,10 +35,27 @@ class QdrantRule(BaseModel):
     collection: str = "passages"
 
 
+class RetrievalRule(BaseModel):
+    mode: Literal["dense", "sparse", "hybrid", "hybrid_rerank"] = "dense"
+    prefetch_limit: int = 20
+    candidates: int = 10
+    top_k: int = 3
+
+
+class RerankingRule(BaseModel):
+    enabled: bool = True
+    model: str = "BAAI/bge-reranker-v2-m3"
+    revision: str
+    max_tokens: int = 512
+    batch_size: int = 8
+
+
 class SearchConfig(BaseModel):
     chunking: ChunkingRule = Field(default_factory=ChunkingRule)
     embedding: EmbeddingRule
     qdrant: QdrantRule = Field(default_factory=QdrantRule)
+    retrieval: RetrievalRule = Field(default_factory=RetrievalRule)
+    reranking: RerankingRule
 
 
 def load_config(path: Path | str | None = None) -> SearchConfig:

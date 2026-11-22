@@ -1,0 +1,67 @@
+# Jeu de questions dont la réponse est connue par construction.
+#
+# Pour chaque dossier, une question est posée dans son seul dossier. Les
+# passages pertinents se déduisent de la structure du dossier (section,
+# question du formulaire, contenu d'une page), pas d'un jugement : un passage
+# est pertinent s'il satisfait l'une des règles « relevant ».
+# Les questions sont reformulées : elles ne reprennent pas le texte des
+# questions du formulaire, qui n'est pas indexé.
+#
+# Règles : section (obligatoire), label_contains et text_contains (facultatifs,
+# sans casse).
+
+[[question]]
+key = "build"
+text = "What product would the candidate like to create, and who would use it?"
+relevant = [{ section = "essay", label_contains = "unlimited time and resources" }]
+
+[[question]]
+key = "unconventional"
+text = "Has the candidate solved a problem in an unusual or creative way?"
+relevant = [{ section = "essay", label_contains = "unconventional approach" }]
+
+[[question]]
+key = "leadership"
+text = "How did the candidate guide and motivate a group of people through a hard period?"
+relevant = [{ section = "essay", label_contains = "led a team" }]
+
+[[question]]
+key = "success"
+text = "How does the candidate define achievement in life and how do they evaluate it?"
+relevant = [{ section = "essay", label_contains = "success mean to you" }]
+
+[[question]]
+key = "perseverance"
+text = "Which ambition did the candidate keep pursuing even after failures?"
+relevant = [{ section = "essay", label_contains = "long-term goal" }]
+
+[[question]]
+key = "motivation"
+text = "Why does the candidate want to join this startup program?"
+relevant = [{ section = "personal_statement" }]
+
+[[question]]
+key = "assessment"
+text = "How did the candidate experience the technical test, and what was difficult?"
+relevant = [{ section = "assessment_reflection" }]
+
+[[question]]
+key = "education"
+text = "What degree does the candidate hold and from which university?"
+relevant = [
+    { section = "education" },
+    { section = "attachment", text_contains = "EDUCATION" },
+]
+
+[[question]]
+key = "experience"
+text = "Which jobs has the candidate held, and at which companies?"
+relevant = [
+    { section = "experience" },
+    { section = "attachment", text_contains = "PROFESSIONAL EXPERIENCE" },
+]
+
+[[question]]
+key = "certificates"
+text = "Which certificates or awards has the candidate received?"
+relevant = [{ section = "attachment", text_contains = "presented to" }]

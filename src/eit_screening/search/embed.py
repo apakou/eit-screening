@@ -56,6 +56,14 @@ def _load(model: str, revision: str):
     return tokenizer, encoder, sparse
 
 
+def release() -> None:
+    """Libère la mémoire du modèle (2 Go environ), par exemple avant de charger le re-ranking."""
+    import gc
+
+    _load.cache_clear()
+    gc.collect()
+
+
 class BgeM3:
     """Encodeur bge-m3 : chargé au premier appel, gardé ensuite en mémoire."""
 
