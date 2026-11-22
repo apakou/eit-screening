@@ -23,6 +23,7 @@ Les étapes 1 à 3 n'utilisent aucun modèle de langage. Elles se font en premie
 - **2. Appariement avec l'export du test** (`screening/assessment_match.py`) : voir ci-dessous.
 - **3. Anonymisation** (`privacy/anonymize.py`) : voir ci-dessous.
 - **4. Pièces jointes et vidéos** (`media/`) : voir ci-dessous.
+- **5. Découpage et indexation** (`search/`) : voir ci-dessous.
 
 ## 1. Contrôles d'éligibilité
 
@@ -245,6 +246,45 @@ Limites :
 
 Acceptation : chaque passage indexé permet de retrouver son emplacement exact
 dans le dossier.
+
+**Fait.** Commandes :
+
+```bash
+docker compose up -d qdrant
+eit-index data/anonymises --qdrant-url http://127.0.0.1:6333 -o data/resultats/indexation.json
+```
+
+Résultat sur la cohorte de référence (serveur Qdrant 1.20.0, bge-m3 sur
+processeur) : 488 passages (réponses libres 200, pièces jointes 101,
+expériences 61, transcription de présentation 46, formation 40, réflexion 40) ;
+chacun relu dans Qdrant redonne exactement son texte, sa section, sa page et
+son horodatage (488/488), et tout le texte indexable est couvert. Aucun passage
+tronqué (204 jetons au plus, limite 512). 3 min 45 s pour la cohorte, soit
+0,46 s par passage ; 2,2 Go de mémoire au plus.
+
+Choix faits :
+
+- **Entrée** : seuls les dossiers anonymisés sont indexés, sous leur
+  pseudonyme. Ni PDF, ni table de correspondance, ni numéro de candidature.
+- **Passages** : 120 mots au plus, 20 mots de recouvrement ; une tranche exacte
+  du texte anonymisé, avec section, question, page et positions. Les segments
+  horodatés consécutifs d'une vidéo sont regroupés et gardent le début du
+  premier et la fin du dernier. Les noms de fichiers ne sont pas indexés.
+- **Embeddings** : bge-m3 (révision `5617a9f`), vecteur dense et poids lexicaux,
+  calculés avec transformers sans la bibliothèque FlagEmbedding. Le test
+  `test_bge_m3_matches_model_card` retrouve les valeurs publiées dans la fiche du
+  modèle à 0,001 près (tolérance du test : 0,002).
+- **Qdrant** : une collection, un index sur le pseudonyme ; réindexer un dossier
+  remplace ses passages. Les tests utilisent Qdrant en mode local, sans serveur.
+
+Limites :
+
+- Les positions se rapportent au texte anonymisé. Dans le dossier d'origine,
+  l'emplacement est exact à la question, à la page ou au segment près.
+- La cohorte n'a pas de transcription horodatée (fichiers `.txt`) : le
+  regroupement des segments n'est vérifié que sur un cas construit à la main.
+- La suite de tests charge Docling, Whisper, spaCy et bge-m3 dans le même
+  processus : 3,1 Go de mémoire au plus.
 
 ## 6. Recherche hybride et re-ranking
 

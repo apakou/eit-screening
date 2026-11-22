@@ -22,6 +22,11 @@ dependencies = [
     "docling>=2.150",
     "faster-whisper>=1.2",
     "numpy>=2",
+    # Indexation : bge-m3 (transformers, torch) et Qdrant.
+    "qdrant-client>=1.15",
+    "huggingface-hub>=0.24",
+    "transformers>=4.44",
+    "torch>=2.4",
 ]
 
 [project.optional-dependencies]
@@ -35,12 +40,13 @@ eit-assessment = "eit_screening.screening.assessment_match:main"
 eit-anonymize = "eit_screening.privacy.anonymize:main"
 eit-leak-check = "eit_screening.privacy.leak_check:main"
 eit-media = "eit_screening.media.extract:main"
+eit-index = "eit_screening.search.index:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-eit_screening = ["synthetic/*.json", "screening/*.toml", "privacy/*.toml", "media/*.toml"]
+eit_screening = ["synthetic/*.json", "screening/*.toml", "privacy/*.toml", "media/*.toml", "search/*.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

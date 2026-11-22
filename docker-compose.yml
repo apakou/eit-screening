@@ -1,0 +1,12 @@
+# Base vectorielle du prototype. Démarrage : docker compose up -d qdrant
+# Le port n'est ouvert que sur la machine locale ; les données restent dans
+# data/qdrant (jamais versionné).
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.20.0
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    restart: unless-stopped

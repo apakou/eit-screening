@@ -46,12 +46,22 @@ def plain_text(text: str | None) -> str:
 
 
 def git_commit() -> str | None:
-    """Commit courant du dépôt, pour dater un export de résultats (``None`` hors dépôt)."""
+    """Commit courant du dépôt, pour dater un export de résultats (``None`` hors dépôt).
+
+    Suffixe « -modifié » si des fichiers du dépôt diffèrent de ce commit ou n'y
+    sont pas encore : le résultat ne vient alors pas exactement de ce commit.
+    """
+    folder = Path(__file__).parent
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, check=True, cwd=Path(__file__).parent,
+            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True, cwd=folder
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], capture_output=True, text=True, check=True, cwd=folder
         )
     except (OSError, subprocess.CalledProcessError):
         return None
-    return result.stdout.strip() or None
+    commit = result.stdout.strip() or None
+    if commit and status.stdout.strip():
+        commit += "-modifié"
+    return commit

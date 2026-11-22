@@ -2,7 +2,7 @@
 
 Prototype d'aide à la présélection des candidatures du MEST AI Startup Program.
 
-Cette version contient six briques :
+Cette version contient sept briques :
 
 - **l'import** : lit un dossier exporté en PDF depuis SurveyMonkey Apply et le
   transforme en données structurées ;
@@ -17,10 +17,12 @@ Cette version contient six briques :
 - **les pièces jointes et les vidéos** : relit les CV et certificats (OCR
   compris) et transcrit les vidéos, avec l'horodatage de chaque segment ;
 - **l'anonymisation** : produit, pour chaque dossier, le texte destiné au
-  modèle de langage sans données personnelles, sous un pseudonyme aléatoire.
+  modèle de langage sans données personnelles, sous un pseudonyme aléatoire ;
+- **l'indexation** : découpe les dossiers anonymisés en passages et les range
+  dans Qdrant avec leurs embeddings bge-m3.
 
-Les étapes suivantes (indexation, recherche, notation, interface) viendront
-s'appuyer sur ces briques.
+Les étapes suivantes (recherche, notation, interface) viendront s'appuyer sur
+ces briques.
 
 ## Installation
 
@@ -175,6 +177,29 @@ dans le dossier de sortie. Relancer l'anonymisation garde les mêmes pseudonymes
 Les paramètres sont dans `src/eit_screening/privacy/anonymize.toml`. Le modèle
 spaCy `en_core_web_md` (licence MIT, environ 55 Mo) est installé avec le projet.
 
+## Indexer les passages
+
+```bash
+docker compose up -d qdrant
+eit-index data/anonymises --qdrant-url http://127.0.0.1:6333 -o data/resultats/indexation.json
+```
+
+Le module lit les dossiers anonymisés et les découpe en passages de 120 mots au
+plus. Chaque passage garde sa provenance : section, question, page, horodatage
+et position exacte dans le texte anonymisé. Les segments horodatés d'une vidéo
+sont regroupés. Chaque passage reçoit un vecteur dense et des poids lexicaux
+calculés par bge-m3 (environ 2,3 Go, téléchargé au premier usage), puis il est
+rangé dans Qdrant sous le pseudonyme du candidat. La commande vérifie ensuite que
+chaque passage relu dans Qdrant pointe exactement vers son texte.
+
+Qdrant tourne dans Docker (`docker-compose.yml`, port ouvert sur la machine
+locale seulement, données dans `data/qdrant`). Le conteneur redémarre avec la
+machine ; `docker compose down` l'arrête. Les fichiers de `data/qdrant`
+appartiennent à root (créés par le conteneur) : pour les effacer, utiliser
+`sudo` ou `docker run --rm -v "$PWD/data:/d" busybox rm -rf /d/qdrant`. Sans `--qdrant-url`, la base est
+locale, sans serveur (`data/qdrant-local`). Les paramètres sont dans
+`src/eit_screening/search/search.toml`.
+
 ## Générer des dossiers fictifs
 
 ```bash
@@ -226,8 +251,9 @@ vérifient que chaque champ relu est identique à la référence.
 Les tests de l'étape 4 chargent de vrais modèles : Docling sur un dossier, et
 Whisper « small » (environ 460 Mo, téléchargé au premier lancement) sur une
 courte vidéo dont la voix est synthétisée par FFmpeg. Ils demandent un FFmpeg
-compilé avec le filtre `flite` (c'est le cas du paquet Ubuntu). Durée totale :
-environ 2 minutes.
+compilé avec le filtre `flite` (c'est le cas du paquet Ubuntu). Les tests de
+l'étape 5 chargent bge-m3. Durée totale : environ 2 minutes, 3,1 Go de mémoire
+au plus.
 
 Contrôle de fuite sur toute la cohorte anonymisée (code indépendant du module
 d'anonymisation) :

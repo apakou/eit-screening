@@ -29,7 +29,8 @@ critères : il propose, l'humain tranche, et les deux décisions sont conservée
 | `src/eit_screening/screening/assessment_match.py` | Fait. Appariement avec l'export du test, paramètres dans `assessment.toml` |
 | `src/eit_screening/privacy/anonymize.py` | Fait. Anonymisation en trois couches, pseudonymes, paramètres dans `anonymize.toml` |
 | `src/eit_screening/media/` | Fait. Pièces jointes (Docling, OCR) et vidéos (FFmpeg, faster-whisper), paramètres dans `media.toml` |
-| Indexation, recherche, verdict, API, interface, évaluation | À faire ensuite |
+| `src/eit_screening/search/` | Fait (indexation). Découpage, bge-m3, Qdrant ; paramètres dans `search.toml` |
+| Recherche hybride, verdict, API, interface, évaluation | À faire ensuite |
 
 Le détail des étapes et leurs critères d'acceptation sont dans
 `docs/feuille-de-route.md`. Les décisions déjà prises et les points à confirmer
@@ -48,6 +49,8 @@ eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scena
 eit-media data/fictifs/dossiers -o data/resultats/extraction.json            # OCR et transcriptions (environ 10 min)
 eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
 eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+docker compose up -d qdrant                                                   # base vectorielle
+eit-index data/anonymises --qdrant-url http://127.0.0.1:6333 -o data/resultats/indexation.json
 ```
 
 ## Règles sur les données

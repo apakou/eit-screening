@@ -1,0 +1,24 @@
+# Paramètres du découpage et de l'indexation des passages anonymisés.
+
+[chunking]
+# Taille visée d'un passage, en mots. Un texte plus court reste en un seul passage.
+max_words = 120
+# Recouvrement entre deux passages consécutifs d'un même texte, en mots.
+overlap_words = 20
+# Sections indexées. Les noms de fichiers (« uploads ») ne le sont pas.
+sections = ["essay", "personal_statement", "assessment_reflection", "attachment", "education", "experience"]
+
+[embedding]
+# BAAI/bge-m3 (licence MIT) : vecteur dense et poids lexicaux (vecteur creux).
+model = "BAAI/bge-m3"
+# Révision figée du dépôt Hugging Face, pour des résultats reproductibles.
+revision = "5617a9f61b028005a4858fdac845db406aefb181"
+max_tokens = 512
+batch_size = 8
+
+[qdrant]
+# Adresse d'un serveur Qdrant (Docker Compose). Vide : base locale dans le
+# dossier « path », sans serveur.
+url = ""
+path = "data/qdrant-local"
+collection = "passages"
