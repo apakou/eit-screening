@@ -1,6 +1,6 @@
-# Base vectorielle du prototype. Démarrage : docker compose up -d qdrant
-# Le port n'est ouvert que sur la machine locale ; les données restent dans
-# data/qdrant (jamais versionné).
+# Services du prototype. Démarrage : docker compose up -d
+# Les ports ne sont ouverts que sur la machine locale ; les données restent dans
+# data/ (jamais versionné).
 services:
   qdrant:
     image: qdrant/qdrant:v1.20.0
@@ -9,4 +9,19 @@ services:
       - "127.0.0.1:6334:6334"
     volumes:
       - ./data/qdrant:/qdrant/storage
+    restart: unless-stopped
+
+  # Base de l'API (candidatures, journal des décisions). Port 5433 : le 5432 est
+  # souvent déjà pris sur une machine de développement. Mot de passe de
+  # développement uniquement.
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: eit
+      POSTGRES_PASSWORD: eit
+      POSTGRES_DB: eit
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
     restart: unless-stopped

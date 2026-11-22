@@ -1,0 +1,188 @@
+"""API FastAPI : liste des candidatures, détail d'un dossier, décision de l'évaluateur, journal.
+
+Le système propose, l'évaluateur tranche : une décision garde le verdict
+proposé et le verdict retenu, avec l'évaluateur, la date et le commentaire.
+Pas d'authentification dans le prototype (Keycloak appartient à l'architecture
+cible) : l'évaluateur est déclaré dans la requête.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Literal
+
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
+
+from .db import Candidate, Decision, make_engine, make_sessionmaker, now
+
+VERDICTS = ("Interview Invitation", "Interview Reject", "Waitlist", "Request Final Review")
+VerdictLabel = Literal["Interview Invitation", "Interview Reject", "Waitlist", "Request Final Review"]
+
+
+class DecisionIn(BaseModel):
+    evaluator: str = Field(min_length=1, max_length=120)
+    action: Literal["validate", "modify"]
+    retained: VerdictLabel | None = None
+    comment: str = ""
+
+    @model_validator(mode="after")
+    def _check(self) -> DecisionIn:
+        if self.action == "modify":
+            if self.retained is None:
+                raise ValueError("Une modification doit donner le verdict retenu.")
+            if not self.comment.strip():
+                raise ValueError("Une modification doit être expliquée par un commentaire.")
+        return self
+
+
+class DecisionOut(BaseModel):
+    id: int
+    pseudonym: str
+    evaluator: str
+    action: str
+    proposed: str
+    retained: str
+    comment: str
+    created_at: datetime
+
+
+class CandidateSummary(BaseModel):
+    pseudonym: str
+    proposed: str
+    total: int | None
+    max_total: int
+    alerts: int
+    concerns: int
+    quotes_verified: int
+    quotes_total: int
+    gender: str | None = None
+    age: int | None = None
+    citizenship: str | None = None
+    status: Literal["à traiter", "validé", "modifié"]
+    retained: str | None = None
+
+
+class CandidateDetail(CandidateSummary):
+    verdict: dict
+    dossier: dict
+    decisions: list[DecisionOut]
+
+
+def _decision_out(row: Decision) -> DecisionOut:
+    return DecisionOut(
+        id=row.id, pseudonym=row.pseudonym, evaluator=row.evaluator, action=row.action, proposed=row.proposed,
+        retained=row.retained, comment=row.comment, created_at=row.created_at,
+    )
+
+
+def _summary(candidate: Candidate, last: Decision | None) -> dict:
+    meta = candidate.metadata_json or {}
+    return dict(
+        pseudonym=candidate.pseudonym, proposed=candidate.proposed, total=candidate.total,
+        max_total=candidate.max_total, alerts=candidate.alerts, concerns=candidate.concerns,
+        quotes_verified=candidate.quotes_verified, quotes_total=candidate.quotes_total,
+        gender=meta.get("gender"), age=meta.get("age"), citizenship=meta.get("citizenship"),
+        status="à traiter" if last is None else ("validé" if last.action == "validate" else "modifié"),
+        retained=None if last is None else last.retained,
+    )
+
+
+def create_app(database_url: str | None = None, allowed_origins: list[str] | None = None) -> FastAPI:
+    engine = make_engine(database_url)
+    sessions: sessionmaker[Session] = make_sessionmaker(engine)
+    app = FastAPI(title="eit-screening", description="Verdicts proposés et décisions des évaluateurs.")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins or ["http://localhost:3100", "http://127.0.0.1:3100"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
+    app.state.sessions = sessions
+
+    def session():
+        with sessions() as db:
+            yield db
+
+    def last_decisions(db: Session) -> dict[str, Decision]:
+        latest: dict[str, Decision] = {}
+        for row in db.scalars(select(Decision).order_by(Decision.created_at, Decision.id)):
+            latest[row.pseudonym] = row
+        return latest
+
+    @app.get("/api/health")
+    def health() -> dict:
+        return {"status": "ok"}
+
+    @app.get("/api/candidates", response_model=list[CandidateSummary])
+    def candidates(
+        verdict: VerdictLabel | None = None,
+        status: Literal["à traiter", "validé", "modifié"] | None = None,
+        sort: Literal["pseudonym", "total", "alerts"] = "pseudonym",
+        order: Literal["asc", "desc"] = "asc",
+        db: Session = Depends(session),
+    ):
+        latest = last_decisions(db)
+        rows = [_summary(c, latest.get(c.pseudonym)) for c in db.scalars(select(Candidate))]
+        if verdict:
+            rows = [r for r in rows if r["proposed"] == verdict]
+        if status:
+            rows = [r for r in rows if r["status"] == status]
+        rows.sort(key=lambda r: (r[sort] is None, r[sort] if r[sort] is not None else 0), reverse=order == "desc")
+        return rows
+
+    @app.get("/api/candidates/{pseudonym}", response_model=CandidateDetail)
+    def candidate(pseudonym: str, db: Session = Depends(session)):
+        row = db.get(Candidate, pseudonym)
+        if row is None:
+            raise HTTPException(404, "Candidature inconnue.")
+        history = list(db.scalars(
+            select(Decision).where(Decision.pseudonym == pseudonym).order_by(Decision.created_at, Decision.id)
+        ))
+        return {
+            **_summary(row, history[-1] if history else None),
+            "verdict": row.verdict,
+            "dossier": row.dossier,
+            "decisions": [_decision_out(d) for d in history],
+        }
+
+    @app.post("/api/candidates/{pseudonym}/decisions", response_model=DecisionOut, status_code=201)
+    def decide(pseudonym: str, body: DecisionIn, db: Session = Depends(session)):
+        row = db.get(Candidate, pseudonym)
+        if row is None:
+            raise HTTPException(404, "Candidature inconnue.")
+        retained = row.proposed if body.action == "validate" else body.retained
+        if body.action == "modify" and retained == row.proposed:
+            raise HTTPException(422, "Le verdict retenu est celui proposé : utiliser « valider ».")
+        decision = Decision(
+            pseudonym=pseudonym, evaluator=body.evaluator.strip(), action=body.action, proposed=row.proposed,
+            retained=retained, comment=body.comment.strip(), created_at=now(),
+        )
+        db.add(decision)
+        db.commit()
+        return _decision_out(decision)
+
+    @app.get("/api/decisions", response_model=list[DecisionOut])
+    def decisions(pseudonym: str | None = Query(default=None), db: Session = Depends(session)):
+        query = select(Decision).order_by(Decision.created_at, Decision.id)
+        if pseudonym:
+            query = query.where(Decision.pseudonym == pseudonym)
+        return [_decision_out(d) for d in db.scalars(query)]
+
+    return app
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description="Lance l'API (base : variable EIT_DATABASE_URL).")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args(argv)
+    uvicorn.run(create_app(), host=args.host, port=args.port)
+    return 0
