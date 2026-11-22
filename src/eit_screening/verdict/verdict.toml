@@ -1,0 +1,33 @@
+# Paramètres du verdict proposé.
+
+[llm]
+# Serveur compatible OpenAI. Par défaut, Ollama sur la machine locale : aucun
+# texte ne quitte la machine. Pour un modèle hébergé (cible du cadrage : Gemma
+# ou Qwen), changer base_url et model, et mettre la clé dans la variable
+# d'environnement nommée par api_key_env. Seul du texte anonymisé est envoyé.
+base_url = "http://127.0.0.1:11434/v1"
+# Substitut local, déjà présent sur la machine de développement (Llama 3.2, 3B).
+model = "llama3.2:latest"
+api_key_env = "EIT_LLM_API_KEY"
+temperature = 0.0
+max_tokens = 1200
+timeout_seconds = 600
+# Nouvelles tentatives si la réponse n'est pas conforme au schéma.
+max_attempts = 3
+
+[retrieval]
+# Passages fournis au modèle pour chaque critère de la grille.
+passages_per_criterion = 3
+
+[decision]
+# Règle explicite entre notes, constats et verdict proposé. Les seuils sont des
+# HYPOTHÈSES : MEST n'a pas donné de seuil (voir docs/cadrage.md).
+invite_min = 28          # total sur 40 à partir duquel l'entretien est proposé
+waitlist_min = 20        # en dessous : Interview Reject
+# Un constat de gravité « alerte » (éligibilité, test) demande une revue humaine.
+review_on_alert = true
+# Nombre de citations non retrouvées mot pour mot au-delà duquel le verdict
+# n'est pas proposé tel quel.
+max_unverified_quotes = 0
+# Un Concern (réponses génériques, test) empêche de proposer directement l'entretien.
+review_invite_with_concern = true
