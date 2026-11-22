@@ -54,6 +54,7 @@ eit-verdict = "eit_screening.verdict.run:main"
 eit-api = "eit_screening.api.app:main"
 eit-api-load = "eit_screening.api.load:main"
 eit-evaluate = "eit_screening.evaluation.report:main"
+eit-counterfactual = "eit_screening.evaluation.counterfactual:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

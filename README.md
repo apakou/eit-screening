@@ -2,13 +2,13 @@
 
 Prototype d'aide à la présélection des candidatures du MEST AI Startup Program.
 
-Cette version contient sept briques :
+Cette version contient onze briques :
 
 - **l'import** : lit un dossier exporté en PDF depuis SurveyMonkey Apply et le
   transforme en données structurées ;
 - **le générateur de dossiers fictifs** : fabrique des dossiers au même format,
   avec des anomalies placées volontairement, pour tester le système sans
-  données personnelles réelles.
+  données personnelles réelles ;
 - **les contrôles d'éligibilité** : âge, nationalité et réponses aux questions
   d'éligibilité, sous forme de constats soumis à l'évaluateur ;
 - **l'appariement avec le test** : rattache chaque ligne de l'export de la
@@ -19,10 +19,14 @@ Cette version contient sept briques :
 - **l'anonymisation** : produit, pour chaque dossier, le texte destiné au
   modèle de langage sans données personnelles, sous un pseudonyme aléatoire ;
 - **l'indexation** : découpe les dossiers anonymisés en passages et les range
-  dans Qdrant avec leurs embeddings bge-m3.
-
-Les étapes suivantes (recherche, notation, interface) viendront s'appuyer sur
-ces briques.
+  dans Qdrant avec leurs embeddings bge-m3 ;
+- **la recherche** : recherche dense et lexicale dans le dossier d'un candidat,
+  fusion RRF et re-ranking, mesurée sur un jeu de questions à réponse connue ;
+- **le verdict** : note, raison et citation vérifiée par critère, verdict
+  proposé par une règle explicite ;
+- **l'API et l'interface** : tableau des candidatures, dossier avec preuves,
+  validation ou modification par l'évaluateur ;
+- **l'évaluation** : un export unique des mesures.
 
 ## Installation
 
@@ -199,6 +203,90 @@ appartiennent à root (créés par le conteneur) : pour les effacer, utiliser
 `sudo` ou `docker run --rm -v "$PWD/data:/d" busybox rm -rf /d/qdrant`. Sans `--qdrant-url`, la base est
 locale, sans serveur (`data/qdrant-local`). Les paramètres sont dans
 `src/eit_screening/search/search.toml`.
+
+## Rechercher dans un dossier
+
+```bash
+eit-search C-1A2B3C4D --qdrant-url http://127.0.0.1:6333
+eit-search-eval --qdrant-url http://127.0.0.1:6333 -o data/resultats/recherche.json
+```
+
+`eit-search` pose, dans le dossier d'un candidat, une requête par critère de la
+grille (`src/eit_screening/grille.toml`) et affiche les passages trouvés avec
+leur provenance. Chaque requête passe par une recherche dense et une recherche
+lexicale limitées au pseudonyme du candidat, fusionnées par Qdrant (RRF), puis
+par le re-ranking bge-reranker-v2-m3 (environ 2,3 Go, téléchargé au premier
+usage).
+
+`eit-search-eval` mesure quatre chaînes (dense, lexicale, hybride, hybride avec
+re-ranking) sur un jeu de questions dont les passages pertinents se déduisent de
+la structure du dossier (`search/questions.toml`). Sur la cohorte de référence,
+la recherche dense seule fait le mieux ; le re-ranking dégrade le résultat
+(voir `docs/feuille-de-route.md`, étape 6).
+
+## Proposer un verdict
+
+```bash
+eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+```
+
+Pour chaque dossier anonymisé, le module cherche les passages de chaque critère
+de la grille, puis demande au modèle de langage, pour chaque critère, une note,
+une raison et une citation recopiée mot pour mot. Le modèle dit aussi si les
+réponses libres sont génériques. La sortie est contrainte par un schéma JSON
+et vérifiée ; une réponse non conforme est redemandée.
+
+Le code vérifie ensuite chaque citation : si elle n'est pas mot pour mot dans le
+dossier, elle est marquée « introuvable » et ne compte pas comme preuve. Le
+verdict proposé vient d'une règle explicite (`verdict/verdict.toml`) qui combine
+les notes, les constats d'éligibilité et de test (étapes 1 et 2) et les
+citations. Chaque appel est journalisé (`<pseudonyme>.appel.json` : messages
+envoyés, passages, réponses brutes).
+
+Le client parle le protocole compatible OpenAI. Par défaut, il vise Ollama sur
+la machine locale (`llama3.2`, substitut du modèle hébergé prévu par le
+cadrage) : aucun texte ne quitte la machine. Pour un fournisseur hébergé,
+changer `base_url` et `model` et mettre la clé dans la variable
+`EIT_LLM_API_KEY`. Seul du texte anonymisé est envoyé : ni genre, ni âge, ni
+nationalité, ni numéro de candidature.
+
+`--dossier-entier` lance la variante de comparaison sans recherche (tout le
+dossier dans le prompt).
+
+## API et interface
+
+```bash
+docker compose up -d postgres
+eit-api-load --verdicts data/verdicts --anonymises data/anonymises
+eit-api                                   # http://127.0.0.1:8000/docs
+cd ui && pnpm install && pnpm dev --port 3100   # http://localhost:3100
+```
+
+L'API (FastAPI, PostgreSQL) sert la liste des candidatures, le détail d'un
+dossier, et enregistre la décision de l'évaluateur : valider le verdict proposé,
+ou le modifier avec un commentaire obligatoire. Chaque décision garde
+l'évaluateur, la date, le verdict proposé et le verdict retenu ; le journal
+n'est jamais réécrit. Pas d'authentification dans le prototype : l'évaluateur
+saisit son nom.
+
+L'interface (Next.js, TypeScript, Tailwind CSS, shadcn/ui) a deux écrans :
+
+- **tableau des candidatures**, triable (total, alertes, Concerns, âge) et
+  filtrable (verdict, statut, genre) ;
+- **dossier** : verdict, règle appliquée, constats et raisons à gauche ; dossier
+  anonymisé à droite, citations vérifiées surlignées ; boutons pour valider ou
+  modifier, et historique des décisions.
+
+## Évaluer
+
+```bash
+eit-evaluate --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+```
+
+Rassemble les mesures de toutes les étapes dans `data/resultats/evaluation.json`
+(date, version du code, modèles, graine) et confronte les constats aux anomalies
+de `scenarios.csv`. Les mesures qui demandent des évaluateurs (alignement,
+accord entre évaluateurs, temps, SUS) sont listées comme non mesurées.
 
 ## Générer des dossiers fictifs
 

@@ -30,7 +30,12 @@ critères : il propose, l'humain tranche, et les deux décisions sont conservée
 | `src/eit_screening/privacy/anonymize.py` | Fait. Anonymisation en trois couches, pseudonymes, paramètres dans `anonymize.toml` |
 | `src/eit_screening/media/` | Fait. Pièces jointes (Docling, OCR) et vidéos (FFmpeg, faster-whisper), paramètres dans `media.toml` |
 | `src/eit_screening/search/` | Fait (indexation). Découpage, bge-m3, Qdrant ; paramètres dans `search.toml` |
-| Recherche hybride, verdict, API, interface, évaluation | À faire ensuite |
+| `src/eit_screening/search/retrieve.py` | Construit et mesuré, critère non atteint ; chaîne par défaut : dense (voir feuille de route, étape 6) |
+| `src/eit_screening/grille.toml`, `grid.py` | Grille et Concerns en configuration |
+| `src/eit_screening/verdict/` | Fait. Verdict, raisons, citations vérifiées, règle de décision ; paramètres dans `verdict.toml` |
+| `src/eit_screening/api/` | Fait. FastAPI et PostgreSQL, journal des décisions |
+| `ui/` | Fait. Next.js, deux écrans (tableau, dossier avec preuves et validation) |
+| `src/eit_screening/evaluation/` | Fait. Export unique des mesures (`eit-evaluate`) |
 
 Le détail des étapes et leurs critères d'acceptation sont dans
 `docs/feuille-de-route.md`. Les décisions déjà prises et les points à confirmer
@@ -41,7 +46,7 @@ une nouvelle étape.
 
 ```bash
 pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu   # installation (PyTorch CPU)
-pytest                                              # tests (environ 2 min)
+pytest                                              # tests (environ 4 min)
 eit-generate -n 40 --graine 2026 -o data/fictifs    # cohorte fictive de référence
 eit-import data/fictifs/dossiers/0000001007/application.pdf -o dossier.json
 eit-eligibility data/fictifs/dossiers --scenarios data/fictifs/scenarios.csv -o data/resultats/eligibilite.json
@@ -51,7 +56,20 @@ eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/ei
 eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
 docker compose up -d qdrant                                                   # base vectorielle
 eit-index data/anonymises --qdrant-url http://127.0.0.1:6333 -o data/resultats/indexation.json
+eit-search-eval --qdrant-url http://127.0.0.1:6333 -o data/resultats/recherche.json   # environ 40 min
+eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs.json   # Ollama local, environ 1 h
+eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs.json --dossier-entier -o data/verdicts-dossier-entier
+docker compose up -d postgres && eit-api-load && eit-api                   # API sur http://127.0.0.1:8000
+cd ui && pnpm install && pnpm dev --port 3100                                 # interface
+eit-evaluate --table ~/.local/share/eit-screening/pseudonymes-fictifs.json   # export unique des mesures
 ```
+
+## Ressources de la machine de développement
+
+Environ 3 à 5 Go de mémoire libre et 2 Go de disque. Docling, Whisper, bge-m3,
+le re-ranking et Ollama prennent chacun environ 2 Go : ne lancer qu'un travail
+lourd à la fois. Le 22 novembre 2026, deux travaux simultanés ont déclenché le
+tueur de processus du noyau, qui a fermé l'application Claude.
 
 ## Règles sur les données
 
@@ -112,8 +130,8 @@ l'architecture cible décrite dans le mémoire. Ils ne sont pas à développer.
 ## Points incertains à ne pas trancher seul
 
 - La grille sur 40 points et la liste exacte des 8 Concerns viennent du mémoire,
-  pas d'un document de MEST. Les garder dans un fichier de configuration, sans
-  les coder en dur.
+  pas d'un document de MEST. Elles sont dans `src/eit_screening/grille.toml`,
+  jamais codées en dur.
 - Le formulaire 2026 et le mémoire se contredisent sur l'âge, la zone
   géographique et la plateforme de test (voir `docs/cadrage.md`). Tant que MEST
   n'a pas tranché, suivre le formulaire 2026 et rendre ces valeurs paramétrables.

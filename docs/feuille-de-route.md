@@ -385,12 +385,27 @@ vérifiées mesuré et exporté.
   proposé, décision de l'évaluateur (valider ou modifier, avec commentaire).
 - Journal de chaque décision : qui, quand, verdict proposé, verdict retenu.
 
+**Fait** (`api/`, commandes `eit-api-load` et `eit-api`). Une modification
+exige le verdict retenu et un commentaire ; « modifier » vers le verdict proposé
+est refusé (il faut « valider »). Le journal n'est jamais réécrit : recharger les
+verdicts ne touche pas aux décisions. PostgreSQL 16 tourne dans Docker sur
+127.0.0.1:5433 ; les tests utilisent SQLite en mémoire. Pas d'authentification :
+l'évaluateur saisit son nom (Keycloak relève de l'architecture cible).
+
 ## 9. Interface
 
 - Next.js, TypeScript, Tailwind CSS, shadcn/ui.
 - Écran 1 : tableau des candidatures, triable et filtrable.
 - Écran 2 : verdict et raisons à gauche, dossier à droite avec les citations
   surlignées ; boutons pour valider ou modifier.
+
+**Fait** (`ui/`, Next.js 16, shadcn/ui). Le tableau se trie par total, alertes,
+Concerns et âge, et se filtre par verdict, statut et genre. L'écran du dossier
+montre la règle appliquée, les constats et Concerns, puis chaque critère avec sa
+note, sa raison et sa citation : « voir dans le dossier » fait défiler le
+dossier anonymisé jusqu'à la citation surlignée ; une citation introuvable est
+marquée comme telle et n'est pas surlignée. L'historique des décisions est
+affiché sous les boutons.
 
 ## 10. Évaluation
 
