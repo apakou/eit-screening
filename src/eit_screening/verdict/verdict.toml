@@ -20,14 +20,19 @@ max_attempts = 3
 passages_per_criterion = 3
 
 [decision]
-# Règle explicite entre notes, constats et verdict proposé. Les seuils sont des
-# HYPOTHÈSES : MEST n'a pas donné de seuil (voir docs/cadrage.md).
+# Guide 2027 : la décision prend trois valeurs (Interview Invitation,
+# Interview Reject, Waitlist) et un booléen distinct, request_further_review.
+# Règle explicite entre notes, constats et décision proposée ; l'évaluateur
+# valide ou modifie toujours.
+#
+# Seuils : HYPOTHÈSES, le guide ne donne pas de seuil.
 invite_min = 28          # total sur 40 à partir duquel l'entretien est proposé
 waitlist_min = 20        # en dessous : Interview Reject
-# Un constat de gravité « alerte » (éligibilité, test) demande une revue humaine.
-review_on_alert = true
-# Nombre de citations non retrouvées mot pour mot au-delà duquel le verdict
-# n'est pas proposé tel quel.
-max_unverified_quotes = 0
-# Un Concern (réponses génériques, test) empêche de proposer directement l'entretien.
-review_invite_with_concern = true
+# Constats qui écartent la candidature selon le guide (« écarté ») : la décision
+# proposée est Interview Reject. Seuls les constats de gravité « alerte » de ces
+# codes comptent (un cas « à vérifier », comme une double nationalité, n'écarte pas).
+exclusion_codes = ["age_out_of_range", "citizenship_outside_region", "graduation_after_cutoff"]
+# request_further_review vaut vrai si l'un de ces cas se présente :
+review_on_findings = true          # tout autre constat (signalé par le guide ou par les contrôles)
+review_on_concerns = true          # un Concern (test, réponses génériques)
+max_unverified_quotes = 0          # plus de citations introuvables que ce nombre

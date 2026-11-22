@@ -6,13 +6,15 @@ School) : le code doit produire des résultats mesurés, repris dans le mémoire
 
 ## Ce que fait le produit
 
-Pour chaque candidature, le système propose un **verdict de présélection** et
-les **raisons** qui l'appuient. Un évaluateur de MEST valide ou modifie ce
-verdict. **Le système ne décide jamais seul**, même pour un candidat hors
-critères : il propose, l'humain tranche, et les deux décisions sont conservées.
+Pour chaque candidature, le système propose une **décision de présélection**
+et les **raisons** qui l'appuient. Un évaluateur de MEST valide ou modifie
+cette décision. **Le système ne décide jamais seul**, même pour un candidat
+écarté par le guide : il propose, l'humain tranche, et les deux décisions sont
+conservées.
 
-- Verdicts possibles : `Interview Invitation`, `Interview Reject`, `Waitlist`,
-  `Request Final Review`.
+- Décision (guide d'évaluation 2027) : trois valeurs, `Interview Invitation`,
+  `Interview Reject`, `Waitlist`, et un booléen distinct,
+  `request_further_review`. « Request Final Review » n'est plus une valeur.
 - Raisons : pour chaque critère de la grille, une phrase et la citation exacte
   du dossier qui l'appuie.
 - Alertes : contrôles d'éligibilité et anomalies (« Concerns »).
@@ -25,17 +27,17 @@ critères : il propose, l'humain tranche, et les deux décisions sont conservée
 | `src/eit_screening/models.py` | Fait. Modèle `Application` partagé par tout le projet |
 | `src/eit_screening/ingestion/smapply_pdf.py` | Fait. Export PDF SurveyMonkey Apply vers `Application` |
 | `src/eit_screening/synthetic/` | Fait. Dossiers fictifs avec anomalies connues d'avance |
-| `src/eit_screening/screening/eligibility.py` | Fait. Constats d'éligibilité, paramètres dans `eligibility.toml` |
+| `src/eit_screening/screening/eligibility.py` | Fait. Constats d'éligibilité (âge, zone, diplôme), paramètres dans `eligibility.toml` |
 | `src/eit_screening/screening/assessment_match.py` | Fait. Appariement avec l'export du test, paramètres dans `assessment.toml` |
 | `src/eit_screening/privacy/anonymize.py` | Fait. Anonymisation en trois couches, pseudonymes, paramètres dans `anonymize.toml` |
 | `src/eit_screening/media/` | Fait. Pièces jointes (Docling, OCR) et vidéos (FFmpeg, faster-whisper), paramètres dans `media.toml` |
 | `src/eit_screening/search/` | Fait (indexation). Découpage, bge-m3, Qdrant ; paramètres dans `search.toml` |
 | `src/eit_screening/search/retrieve.py` | Construit et mesuré, critère non atteint ; chaîne par défaut : dense (voir feuille de route, étape 6) |
-| `src/eit_screening/grille.toml`, `grid.py` | Grille et Concerns en configuration |
-| `src/eit_screening/verdict/` | Fait. Verdict, raisons, citations vérifiées, règle de décision ; paramètres dans `verdict.toml` |
-| `src/eit_screening/api/` | Fait. FastAPI et PostgreSQL, journal des décisions |
-| `ui/` | Fait. Next.js, deux écrans (tableau, dossier avec preuves et validation) |
-| `src/eit_screening/evaluation/` | Fait. Export unique des mesures (`eit-evaluate`) |
+| `src/eit_screening/grille.toml`, `grid.py` | Grille provisoire (mémoire) en configuration, domaines du guide à reporter |
+| `src/eit_screening/verdict/` | Écrit et testé (faux serveur) ; aucun verdict produit sur la cohorte 2027. Décision à trois valeurs + revue complémentaire ; paramètres dans `verdict.toml` |
+| `src/eit_screening/api/` | Écrit et testé (SQLite) ; jamais lancé contre PostgreSQL avec de vrais verdicts |
+| `ui/` | Écrit, types et lint vérifiés ; jamais ouvert dans un navigateur |
+| `src/eit_screening/evaluation/` | Écrit et testé (outils) ; `eit-evaluate` et `eit-counterfactual` jamais exécutés |
 
 Le détail des étapes et leurs critères d'acceptation sont dans
 `docs/feuille-de-route.md`. Les décisions déjà prises et les points à confirmer
@@ -48,20 +50,20 @@ une nouvelle étape.
 pip install -e ".[dev]" --extra-index-url https://download.pytorch.org/whl/cpu   # installation (PyTorch CPU)
 pytest                                              # tests (environ 4 min)
 eit-generate -n 40 --graine 2026 -o data/fictifs    # cohorte fictive de référence
-eit-import data/fictifs/dossiers/0000001007/application.pdf -o dossier.json
+eit-import data/fictifs/dossiers/EIT-2027-001007/application.pdf -o dossier.json
 eit-eligibility data/fictifs/dossiers --scenarios data/fictifs/scenarios.csv -o data/resultats/eligibilite.json
 eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scenarios data/fictifs/scenarios.csv -o data/resultats/appariement.json
 eit-media data/fictifs/dossiers -o data/resultats/extraction.json            # OCR et transcriptions (environ 10 min)
-eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
-eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json
+eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json
 docker compose up -d qdrant                                                   # base vectorielle
 eit-index data/anonymises --qdrant-url http://127.0.0.1:6333 -o data/resultats/indexation.json
 eit-search-eval --qdrant-url http://127.0.0.1:6333 -o data/resultats/recherche.json   # environ 40 min
-eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs.json   # Ollama local, environ 1 h
-eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs.json --dossier-entier -o data/verdicts-dossier-entier
+eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json   # Ollama local, environ 1 h
+eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json --dossier-entier -o data/verdicts-dossier-entier
 docker compose up -d postgres && eit-api-load && eit-api                   # API sur http://127.0.0.1:8000
 cd ui && pnpm install && pnpm dev --port 3100                                 # interface
-eit-evaluate --table ~/.local/share/eit-screening/pseudonymes-fictifs.json   # export unique des mesures
+eit-evaluate --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json   # export unique des mesures
 ```
 
 ## Ressources de la machine de développement
@@ -132,8 +134,14 @@ l'architecture cible décrite dans le mémoire. Ils ne sont pas à développer.
 - La grille sur 40 points et la liste exacte des 8 Concerns viennent du mémoire,
   pas d'un document de MEST. Elles sont dans `src/eit_screening/grille.toml`,
   jamais codées en dur.
-- Le formulaire 2026 et le mémoire se contredisent sur l'âge, la zone
-  géographique et la plateforme de test (voir `docs/cadrage.md`). Tant que MEST
-  n'a pas tranché, suivre le formulaire 2026 et rendre ces valeurs paramétrables.
-- Le format réel de l'export du test est inconnu : `assessment_results.csv` est
-  une supposition.
+- Le guide d'évaluation 2027 de MEST est la référence (voir
+  `docs/cadrage.md`) : âge 21-35 au 1er janvier 2027, Afrique de l'Ouest ou de
+  l'Est, diplôme avant 2028, test ClassMarker (date limite 20 juillet 23 h 59
+  GMT), identifiants `EIT-2027-XXXXXX`. Ce qu'il ne précise pas (dates du
+  programme, liste des pays d'Afrique de l'Est, année et durée du test) est en
+  configuration et marqué HYPOTHÈSE.
+- Les domaines de la grille du guide ne sont pas encore reportés :
+  `grille.toml` garde la grille provisoire du mémoire. Ne pas inventer de noms
+  ni de pondération.
+- Le format réel de l'export ClassMarker est inconnu : `assessment_results.csv`
+  est une supposition.

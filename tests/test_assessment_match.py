@@ -24,7 +24,7 @@ def _app(application_id, first, last, email):
     )
 
 
-def _row(line, first, last, email, score=60, minutes=50, completed="2025-07-20T10:00"):
+def _row(line, first, last, email, score=60, minutes=50, completed="2026-07-10T10:00"):
     raw = {
         "first_name": first, "last_name": last, "email": email,
         "score_percent": str(score), "time_taken_minutes": str(minutes), "completed_at": completed or "",
@@ -58,14 +58,15 @@ def _codes(match):
 def test_reference_cohort(cohort, parsed):
     out_dir, dossiers = cohort
     rows = read_export(out_dir / "assessment_results.csv")
-    assert len(rows) == 38
+    # Composition (feuille de route) : 1 test introuvable sur 40 dossiers.
+    assert len(rows) == 39
     result = match_assessments([parsed[d.application.application_id] for d in dossiers], rows)
     comparison = compare_with_scenarios(result, rows, out_dir / "scenarios.csv")
-    assert comparison.correctly_attached == 38
+    assert comparison.correctly_attached == 39
     assert comparison.wrongly_attached == [] and comparison.not_attached == []
     assert (comparison.swapped_attached, comparison.swapped_expected) == (2, 2)
     assert comparison.findings_expected == comparison.findings_found == {
-        "assessment_not_found": 2, "assessment_late": 2, "assessment_too_fast": 2,
+        "assessment_not_found": 1, "assessment_late": 2, "assessment_too_fast": 2,
     }
     assert comparison.missed == [] and comparison.false_alerts == []
     assert result.unattached == []
@@ -87,7 +88,7 @@ def test_cli(cohort, tmp_path, capsys):
             "--scenarios", str(out_dir / "scenarios.csv"), "-o", str(out)]
     assert main(args) == 0
     printed = capsys.readouterr().out
-    assert "Lignes rattachées au bon dossier : 38/38, au mauvais : 0, non rattachées : 0." in printed
+    assert "Lignes rattachées au bon dossier : 39/39, au mauvais : 0, non rattachées : 0." in printed
     assert "Noms inversés rattachés : 2/2." in printed
     assert out.exists()
 
@@ -116,7 +117,7 @@ def test_never_attaches_to_wrong_dossier(seed):
 
 
 def test_totals_over_twelve_seeds():
-    """Chiffre repris dans la feuille de route : 12 graines, 456 lignes."""
+    """Chiffre repris dans la feuille de route : 12 graines, 468 lignes."""
     rows_total = attached = wrong = ambiguous = orphans = 0
     for seed in range(12):
         dossiers = build_cohort(40, seed=seed)
@@ -131,7 +132,7 @@ def test_totals_over_twelve_seeds():
         ambiguous += sum(item.reason == "ambiguous" for item in result.unattached)
         orphans += sum(item.reason == "no_candidate" for item in result.unattached)
     # Les 3 lignes refusées : nom inversé d'un candidat qui a un homonyme exact.
-    assert (rows_total, attached, wrong, ambiguous, orphans) == (456, 453, 0, 3, 0)
+    assert (rows_total, attached, wrong, ambiguous, orphans) == (468, 466, 0, 2, 0)
 
 
 def test_row_order_does_not_matter():
@@ -230,14 +231,37 @@ def test_shared_email_is_refused():
 
 @pytest.mark.parametrize(
     ("completed", "late"),
-    [("2025-08-10T23:59", False), ("2025-08-11T00:00", True), ("2025-07-01T09:00", False)],
+    [("2026-07-20T23:59", False), ("2026-07-21T00:00", True), ("2026-07-22T18:00", True), ("2026-07-01T09:00", False)],
 )
-def test_deadline_day_included(completed, late):
+def test_deadline_is_20_july_2359_gmt(completed, late):
     result = match_assessments(
         [_app("1", "Ama", "Osei", "a@example.org")], [_row(2, "Ama", "Osei", "a@example.org", completed=completed)],
         CONFIG,
     )
-    assert ("assessment_late" in _codes(result.matches[0])) is late
+    match = result.matches[0]
+    assert ("assessment_late" in _codes(match)) is late
+    if late:
+        # Guide 2027 : signalé, pas écarté.
+        assert match.findings[0].severity == "to_check" and "GMT" in match.findings[0].message
+
+
+def test_export_timezone_is_applied():
+    # 00:30 à Lagos (GMT+1) le 21 juillet = 23:30 GMT le 20 : dans les temps.
+    config = CONFIG.model_copy(deep=True)
+    config.export.timezone = "Africa/Lagos"
+    row = _row(2, "Ama", "Osei", "a@example.org", completed="2026-07-21T00:30")
+    assert match_assessments([_app("1", "Ama", "Osei", "a@example.org")], [row], config).matches[0].findings == []
+    row = _row(2, "Ama", "Osei", "a@example.org", completed="2026-07-21T01:30")
+    assert _codes(match_assessments([_app("1", "Ama", "Osei", "a@example.org")], [row], config).matches[0]) == [
+        "assessment_late"
+    ]
+
+
+def test_deadline_needs_a_timezone():
+    from eit_screening.screening.assessment_match import DeadlineRule
+
+    with pytest.raises(ValueError):
+        DeadlineRule(deadline=datetime(2026, 7, 20, 23, 59, 59))
 
 
 @pytest.mark.parametrize(("minutes", "flagged"), [(20, False), (19.5, True), (7, True), (70, False)])
@@ -265,8 +289,8 @@ def test_unreadable_date():
 
 def test_multiple_results_keep_the_earliest():
     rows = [
-        _row(2, "Ama", "Osei", "a@example.org", completed="2025-08-12T10:00"),
-        _row(3, "Ama", "Osei", "a@example.org", completed="2025-07-12T10:00"),
+        _row(2, "Ama", "Osei", "a@example.org", completed="2026-08-12T10:00"),
+        _row(3, "Ama", "Osei", "a@example.org", completed="2026-07-12T10:00"),
     ]
     match = match_assessments([_app("1", "Ama", "Osei", "a@example.org")], rows, CONFIG).matches[0]
     assert (match.row.line, match.other_rows) == (3, [2])
@@ -296,7 +320,7 @@ time_taken_minutes = "Minutes"
 completed_at = "Completed"
 
 [deadline]
-last_day = 2025-07-31
+deadline = 2026-07-10T23:59:59Z
 
 [duration]
 allotted_minutes = 70
@@ -314,11 +338,11 @@ def test_other_export_format(tmp_path):
     export = tmp_path / "export.csv"
     export.write_text(
         "First Name;Last Name;Email;Score;Minutes;Completed\n"
-        "Ama;Osei;a@example.org;71%;25;05/08/2025 14:30\n",
+        "Ama;Osei;a@example.org;71%;25;15/07/2026 14:30\n",
         encoding="utf-8",
     )
     (row,) = read_export(export, config)
-    assert (row.line, row.score_percent, row.completed_at) == (2, 71.0, datetime(2025, 8, 5, 14, 30))
+    assert (row.line, row.score_percent, row.completed_at) == (2, 71.0, datetime(2026, 7, 15, 14, 30))
     match = match_assessments([_app("1", "Ama", "Osei", "a@example.org")], [row], config).matches[0]
     # Même ligne : en retard et trop rapide avec ces paramètres, pas avec ceux par défaut.
     assert _codes(match) == ["assessment_late", "assessment_too_fast"]

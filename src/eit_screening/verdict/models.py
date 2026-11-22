@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 
 from ..screening.common import Finding
 
-VerdictLabel = Literal["Interview Invitation", "Interview Reject", "Waitlist", "Request Final Review"]
+# Guide 2027 : trois décisions, et un booléen distinct pour la revue complémentaire.
+VerdictLabel = Literal["Interview Invitation", "Interview Reject", "Waitlist"]
 
 
 class LlmRule(BaseModel):
@@ -31,9 +32,10 @@ class RetrievalRule(BaseModel):
 class DecisionRule(BaseModel):
     invite_min: int
     waitlist_min: int
-    review_on_alert: bool = True
+    exclusion_codes: list[str] = Field(default_factory=list)
+    review_on_findings: bool = True
+    review_on_concerns: bool = True
     max_unverified_quotes: int = 0
-    review_invite_with_concern: bool = True
 
 
 class VerdictConfig(BaseModel):
@@ -113,8 +115,10 @@ class Verdict(BaseModel):
     """Verdict proposé à l'évaluateur. Il ne décide de rien : l'évaluateur valide ou modifie."""
 
     pseudonym: str
-    proposed: VerdictLabel
-    rule: str  # pourquoi ce verdict, en une phrase
+    proposed: VerdictLabel | None  # None : aucune note exploitable, rien à proposer
+    request_further_review: bool
+    rule: str  # pourquoi cette décision, en une phrase
+    review_reasons: list[str] = Field(default_factory=list)
     total: int | None = None
     max_total: int
     criteria: list[CriterionResult] = Field(default_factory=list)

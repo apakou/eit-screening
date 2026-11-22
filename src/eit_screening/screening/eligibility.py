@@ -1,14 +1,15 @@
 """Contrôles d'éligibilité d'un dossier de candidature.
 
 Le module confronte les réponses du candidat aux questions d'éligibilité avec
-les données de son dossier (date de naissance, nationalité) et relève chaque
-réponse « No ». Il produit des **constats**, jamais une décision : un constat
+les données de son dossier (date de naissance, nationalité, date d'obtention du
+diplôme) et relève chaque réponse « No ». Il produit des **constats**, jamais une décision : un constat
 dit ce qui pose question et cite l'élément du dossier qui le montre ;
 l'évaluateur tranche.
 
-Les paramètres (tranche d'âge, date de référence, pays de la zone) viennent
-d'un fichier TOML. Le fichier par défaut, ``eligibility.toml``, suit le
-formulaire 2026 ; un autre fichier peut être passé avec ``--config``.
+Les paramètres (tranche d'âge, date de référence, pays de la zone, années
+d'obtention du diplôme) viennent d'un fichier TOML. Le fichier par défaut,
+``eligibility.toml``, suit le guide d'évaluation 2027 ; un autre fichier peut
+être passé avec ``--config``.
 """
 
 from __future__ import annotations
@@ -38,6 +39,9 @@ class AgeRule(BaseModel):
     min: int
     max: int
     reference_date: date
+    # Démarrage et fin du programme : facultatifs (le guide 2027 ne les donne pas).
+    program_start: date | None = None
+    program_end: date | None = None
 
     @model_validator(mode="after")
     def _check_bounds(self) -> AgeRule:
@@ -63,6 +67,11 @@ class CitizenshipRule(BaseModel):
         return None
 
 
+class EducationRule(BaseModel):
+    excluded_from_year: int
+    review_year: int
+
+
 class QuestionKeys(BaseModel):
     """Clés des questions d'éligibilité reliées à une donnée du dossier."""
 
@@ -73,6 +82,7 @@ class QuestionKeys(BaseModel):
 class EligibilityConfig(BaseModel):
     age: AgeRule
     citizenship: CitizenshipRule
+    education: EducationRule | None = None
     questions: QuestionKeys = Field(default_factory=QuestionKeys)
 
 
@@ -180,6 +190,32 @@ def _check_age(app: Application, rule: AgeRule, key: str) -> tuple[int | None, F
             evidence=evidence,
         )
     age = age_on(birth, rule.reference_date)
+    reference = f"{rule.reference_date:%d/%m/%Y}"
+    submitted = app.last_submitted.date() if app.last_submitted else None
+
+    def borderline(message: str) -> tuple[int, Finding]:
+        return age, Finding(code="age_borderline", severity="to_check", message=message, evidence=evidence)
+
+    if age == rule.min - 1 and rule.program_start and age_on(birth, rule.program_start) >= rule.min:
+        return borderline(
+            f"{age} ans au {reference}, mais {rule.min} ans au démarrage du programme "
+            f"({rule.program_start:%d/%m/%Y}) : à examiner, pas à écarter."
+        )
+    if age == rule.min and submitted and age_on(birth, submitted) < rule.min:
+        return borderline(
+            f"{age_on(birth, submitted)} ans au dépôt du dossier ({submitted:%d/%m/%Y}), {age} ans au {reference} : "
+            "dans la tranche à la date de référence ; signalé pour examen."
+        )
+    if age == rule.max:
+        if rule.program_end is None:
+            return borderline(
+                f"{age} ans au {reference} : pourrait atteindre {age + 1} ans pendant le programme ; signalé pour examen."
+            )
+        if age_on(birth, rule.program_end) > rule.max:
+            return borderline(
+                f"{age} ans au {reference}, {age_on(birth, rule.program_end)} ans à la fin du programme "
+                f"({rule.program_end:%d/%m/%Y}) ; signalé pour examen."
+            )
     if rule.min <= age <= rule.max:
         return age, None
     return age, Finding(
@@ -228,6 +264,35 @@ def _check_citizenship(app: Application, rule: CitizenshipRule, key: str) -> Fin
     return Finding(code="citizenship_outside_region", severity="alert", message=message, evidence=evidence)
 
 
+def _check_education(app: Application, rule: EducationRule) -> Finding | None:
+    """Date d'obtention du diplôme : la plus tardive des formations déclarées."""
+    dated = [(edu.graduation_date, index) for index, edu in enumerate(app.education) if edu.graduation_date]
+    if not dated:
+        return None
+    latest, index = max(dated)
+    raw = [i.answer for i in app.items
+           if "eligibility" not in (i.task or "").casefold() and _same_question(i.question, "Graduation date")]
+    value = raw[index] if index < len(raw) else latest.isoformat()
+    evidence = [Evidence(field=f"education[{index}].graduation_date", question="Graduation date", value=value)]
+    several = " (date la plus tardive des formations déclarées)" if len(dated) > 1 else ""
+    if latest.year >= rule.excluded_from_year:
+        return Finding(
+            code="graduation_after_cutoff",
+            severity="alert",
+            message=f"Diplôme obtenu en {latest:%m/%Y}{several} : à partir de {rule.excluded_from_year}, "
+            "le guide écarte la candidature.",
+            evidence=evidence,
+        )
+    if latest.year == rule.review_year:
+        return Finding(
+            code="graduation_review",
+            severity="to_check",
+            message=f"Diplôme obtenu en {latest:%m/%Y}{several} : année {rule.review_year}, le mois est à examiner.",
+            evidence=evidence,
+        )
+    return None
+
+
 def check_eligibility(app: Application, config: EligibilityConfig | None = None) -> EligibilityReport:
     """Contrôle un dossier et renvoie ses constats (liste vide si rien n'est relevé)."""
     config = config or load_config()
@@ -244,6 +309,11 @@ def check_eligibility(app: Application, config: EligibilityConfig | None = None)
             findings.append(finding)
             if finding.code in ("age_out_of_range", "citizenship_outside_region"):
                 covered.add(key)
+
+    if config.education is not None:
+        education_finding = _check_education(app, config.education)
+        if education_finding is not None:
+            findings.append(education_finding)
 
     if not app.eligibility:
         findings.append(
@@ -294,7 +364,10 @@ def check_eligibility(app: Application, config: EligibilityConfig | None = None)
 # Anomalies de scenarios.csv que ce module doit retrouver, avec le code du constat attendu.
 SCENARIO_CODES = {
     "age_out_of_range": "age_out_of_range",
+    "age_borderline": "age_borderline",
     "citizenship_outside_region": "citizenship_outside_region",
+    "graduation_after_cutoff": "graduation_after_cutoff",
+    "graduation_review": "graduation_review",
 }
 
 

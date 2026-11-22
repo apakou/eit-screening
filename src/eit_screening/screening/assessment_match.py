@@ -25,12 +25,13 @@ import json
 import sys
 import tomllib
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from importlib import resources
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from rapidfuzz import fuzz
 
 from .. import __version__
@@ -55,11 +56,19 @@ class ExportFormat(BaseModel):
     delimiter: str = ","
     encoding: str = "utf-8"
     datetime_format: str = ""
+    timezone: str = "UTC"
     columns: ExportColumns = Field(default_factory=ExportColumns)
 
 
 class DeadlineRule(BaseModel):
-    last_day: date
+    deadline: datetime  # avec fuseau horaire
+    platform_close: datetime | None = None
+
+    @model_validator(mode="after")
+    def _aware(self) -> DeadlineRule:
+        if self.deadline.tzinfo is None:
+            raise ValueError("La date limite du test doit préciser son fuseau horaire (ex. 2026-07-20T23:59:59Z).")
+        return self
 
 
 class DurationRule(BaseModel):
@@ -282,8 +291,11 @@ def _dossier_email(app: Application) -> Evidence:
 def _row_findings(row: AssessmentRow, config: AssessmentConfig, export_name: str) -> list[Finding]:
     columns = config.export.columns
     findings: list[Finding] = []
-    deadline = config.deadline.last_day
+    deadline = config.deadline.deadline
     completed = _cell(row, "completed_at", columns.completed_at, export_name)
+    finished = row.completed_at
+    if finished is not None and finished.tzinfo is None:
+        finished = finished.replace(tzinfo=ZoneInfo(config.export.timezone))
     if row.completed_at is None:
         findings.append(
             Finding(
@@ -293,15 +305,15 @@ def _row_findings(row: AssessmentRow, config: AssessmentConfig, export_name: str
                 evidence=[completed],
             )
         )
-    elif row.completed_at.date() > deadline:
-        days = (row.completed_at.date() - deadline).days
+    elif finished > deadline:
+        gmt = finished.astimezone(timezone.utc)
         findings.append(
             Finding(
                 code="assessment_late",
-                severity="alert",
+                severity="to_check",
                 message=(
-                    f"Test terminé le {row.completed_at:%d/%m/%Y}, après la date limite du {deadline:%d/%m/%Y} "
-                    f"({days} jour{'s' if days > 1 else ''} de retard)."
+                    f"Test soumis le {gmt:%d/%m/%Y à %H:%M} GMT, après la date limite du "
+                    f"{deadline.astimezone(timezone.utc):%d/%m/%Y à %H:%M} GMT."
                 ),
                 evidence=[completed],
             )

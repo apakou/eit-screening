@@ -30,6 +30,7 @@ def load(verdicts: Path, anonymized: Path, url: str | None = None, sessions=None
             dossier = json.loads(dossier_path.read_text(encoding="utf-8"))
             row = db.get(Candidate, verdict["pseudonym"]) or Candidate(pseudonym=verdict["pseudonym"])
             row.proposed = verdict["proposed"]
+            row.request_further_review = verdict["request_further_review"]
             row.total = verdict["total"]
             row.max_total = verdict["max_total"]
             row.alerts = sum(f["severity"] == "alert" for f in verdict["findings"])

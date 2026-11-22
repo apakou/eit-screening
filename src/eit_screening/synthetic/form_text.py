@@ -1,11 +1,13 @@
-"""Textes du formulaire « MEST AI Startup Program (Class of 2026) ».
+"""Textes du formulaire « MEST AI Startup Program (Class of 2027) ».
 
-Libellés, aides et introductions repris de l'export réel, pour que les
-dossiers fictifs posent exactement les mêmes questions. Seules les réponses
-sont inventées.
+Libellés, aides et introductions repris de l'export réel de la promotion 2026,
+pour que les dossiers fictifs posent les mêmes questions. Les valeurs changées
+par le guide d'évaluation 2027 (âge 21-35, Afrique de l'Ouest ou de l'Est,
+ClassMarker, dates du programme) y sont reportées ; le formulaire 2027
+lui-même n'a pas été vu. Seules les réponses sont inventées.
 """
 
-PROGRAM = "MEST AI Startup Program (Class of 2026)"
+PROGRAM = "MEST AI Startup Program (Class of 2027)"
 
 TASK_ELIGIBILITY = "Program Eligibility Screening"
 TASK_ASSESSMENT = "Complete your Assessment"
@@ -24,8 +26,8 @@ ELIGIBILITY_INTRO = [
 
 # (clé, question, aide éventuelle)
 ELIGIBILITY_QUESTIONS: list[tuple[str, str, str | None]] = [
-    ("citizen_of_region", "Are you a citizen of a country in West Africa?", None),
-    ("age_in_range", "Are you between the ages of 21-30?", None),
+    ("citizen_of_region", "Are you a citizen of a country in West Africa or East Africa?", None),
+    ("age_in_range", "Are you between the ages of 21-35?", None),
     (
         "has_degree",
         "Do you hold a degree, diploma, or equivalent experience (i.e. work experience, "
@@ -53,14 +55,14 @@ ELIGIBILITY_QUESTIONS: list[tuple[str, str, str | None]] = [
         "full_time_commitment",
         "Are you willing to pause or leave your current work/academic commitments to fully "
         "commit to the MEST AI Startup Program for up to 12 months of training and potential "
-        "incubation (January to December 2026)?",
+        "incubation (January to December 2027)?",
         None,
     ),
     (
         "can_relocate",
         "Are you able to relocate to Accra, Ghana for 7 months of in-person training (January "
-        "– July 2026), followed by a potential 4-month incubation period (September – December "
-        "2026)?",
+        "– July 2027), followed by a potential 4-month incubation period (September – December "
+        "2027)?",
         "This program is fully funded and covers travel, accommodation, health care, "
         "immigration expenses, selected meals, and a monthly stipend.",
     ),
@@ -109,7 +111,7 @@ SECTION_REFERENCES = (
 )
 
 HELP_INTERVIEW_CITY = (
-    "You must be from a West African country and be able to attend in-person interviews in "
+    "You must be from a West or East African country and be able to attend in-person interviews in "
     "Ghana, Nigeria or Senegal."
 )
 HELP_GENDER = "As stated on your International Passport."
@@ -170,12 +172,12 @@ EVIDENCE_URLS_PROMPT = [
 
 ASSESSMENT_TEXT = [
     "Please follow this link to access the MEST AI Startup Program Assessment on the "
-    "TestGorilla platform. This test will take 70 minutes to complete. You will follow 3 steps:",
+    "ClassMarker platform. This test will take 70 minutes to complete. You will follow 3 steps:",
     '1. Register your email through the box on the right that says, "invite yourself to the '
     'assessment".',
     "2. Set up your device by checking audio and video.",
     "3. Take the assessment.",
-    "Please visit the TestGorilla Step-by-Step Guide or the FAQ page if you are experiencing "
+    "Please visit the ClassMarker Step-by-Step Guide or the FAQ page if you are experiencing "
     "any challenges.",
     "You are required to complete all sections of the assessment. Once finished, return to "
     "your SurveyMonkey Apply application dashboard and submit a brief reflection on your "

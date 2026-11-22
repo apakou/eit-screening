@@ -432,8 +432,13 @@ class Masker:
             self.counts[key] = self.counts.get(key, 0) + 1
 
     def _is_person(self, found: str) -> bool:
-        """Écarte ce que le dossier désigne déjà comme lieu, organisation, poste ou formation."""
-        if "[" in found or "]" in found or not any(char.isupper() for char in found):
+        """Écarte ce que le dossier désigne déjà comme lieu, organisation, poste ou formation.
+
+        Écarte aussi les passages qui contiennent des chiffres : un nom de personne n'en
+        contient pas (« VID_20260714_344953.mp4 » était pris pour un nom). Un « _ » seul
+        n'écarte pas : « Prénom_Nom_CV.pdf » doit rester masquable.
+        """
+        if re.search(r"[\[\]\d]", found) or not any(char.isupper() for char in found):
             return False
         key = " ".join(re.findall(r"[^\W\d_]+", _fold_plain(found)))
         if len(key) < 2 or key in self._allow or set(key.split()) & self._allow:

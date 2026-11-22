@@ -7,10 +7,25 @@ la cohorte fictive de référence :
 eit-generate -n 40 --graine 2026 -o data/fictifs
 ```
 
-Cette cohorte contient 40 dossiers, dont 16 avec une anomalie : 2 noms inversés
-dans l'export du test, 2 tests introuvables, 2 tests en retard, 2 tests trop
-rapides, 3 séries de réponses génériques, 2 âges hors tranche, 1 nationalité
-hors zone, 1 CV manquant, 1 vidéo inaudible. L'export du test compte 38 lignes.
+Depuis le guide d'évaluation 2027 (22 novembre 2026), la cohorte suit ses
+règles : identifiants `EIT-2027-001001` à `EIT-2027-001040`, âge au 1er janvier
+2027, Afrique de l'Ouest ou de l'Est, test ClassMarker à rendre le 20 juillet
+2026 à 23 h 59 GMT. Elle contient 40 dossiers, dont 16 avec une anomalie :
+2 noms inversés dans l'export du test, 1 test introuvable, 2 tests rendus après
+la date limite (le 21 ou le 22 juillet), 2 tests trop rapides, 1 série de
+réponses génériques, 2 âges hors tranche, 1 âge limite (20 ans au dépôt ou
+35 ans au 1er janvier 2027), 1 nationalité hors zone, 1 diplôme en 2028,
+1 diplôme en 2027, 1 CV manquant, 1 vidéo inaudible. L'export du test compte
+39 lignes. Les dossiers réguliers ont entre 22 et 34 ans et un diplôme obtenu
+au plus tard en 2026.
+
+**Chiffres de l'ancienne cohorte.** Les résultats des étapes 3 à 6 ci-dessous
+ont été mesurés sur la cohorte précédente (règles du formulaire 2026, 38 lignes
+de test). Ils restent valables comme mesures de méthode, mais doivent être
+relancés sur la nouvelle cohorte avant d'être cités. Les résultats d'alors sont
+gardés dans `data/archives/cohorte-formulaire-2026/`. La collection Qdrant
+`passages` de l'ancienne cohorte a été supprimée (488 points) : réindexer la
+nouvelle cohorte la recrée, sans mélanger les deux.
 
 Les étapes 1 à 3 n'utilisent aucun modèle de langage. Elles se font en premier.
 
@@ -33,6 +48,8 @@ Module proposé : `screening/eligibility.py`.
 - Calculer l'âge à la date de référence à partir de la date de naissance et le
   comparer à la tranche autorisée.
 - Vérifier que la nationalité appartient à la zone autorisée.
+- Guide 2027 : vérifier l'année d'obtention du diplôme (2028 ou après :
+  écarté ; 2027 : signalé) et signaler sans écarter les âges limites.
 - Signaler toute réponse « No » aux questions d'éligibilité, et toute
   contradiction entre une réponse « Yes » et les données du dossier.
 - Paramètres (tranche d'âge, date de référence, liste des pays) dans un fichier
@@ -40,22 +57,30 @@ Module proposé : `screening/eligibility.py`.
 - Sortie : une liste de constats typés (code, gravité, message, élément du
   dossier qui le prouve). Aucun rejet automatique.
 
-Acceptation : les 2 âges hors tranche et la nationalité hors zone sont signalés ;
-aucun constat sur les 37 autres dossiers.
+Acceptation (guide 2027) : les 2 âges hors tranche, l'âge limite, la nationalité
+hors zone et les 2 diplômes (2028, 2027) sont signalés ; aucun constat sur les
+34 autres dossiers.
 
-**Fait.** Résultat sur la cohorte de référence, lue depuis les PDF : 3 anomalies
-attendues, 3 retrouvées, 0 manquée, 0 constat en trop ; 37 dossiers sans aucun
+**Fait.** Résultat sur la cohorte de référence, lue depuis les PDF : 6 anomalies
+attendues, 6 retrouvées, 0 manquée, 0 constat en trop ; 34 dossiers sans aucun
 constat. Commande :
 
 ```bash
 eit-eligibility data/fictifs/dossiers --scenarios data/fictifs/scenarios.csv -o data/resultats/eligibilite.json
 ```
 
-Choix faits, à confirmer avec MEST :
+Règles du guide 2027 et choix faits pour les appliquer (à confirmer avec MEST,
+voir `docs/cadrage.md`) :
 
-- âge calculé au 1er janvier 2026 (début du programme) ;
-- « Afrique de l'Ouest » au sens de l'ONU (16 pays, dont Mali, Burkina Faso,
-  Niger et Mauritanie) ;
+- âge : 21 à 35 ans au 1er janvier 2027 (alerte hors tranche). Signalés sans
+  être écartés (constat « à vérifier », `age_borderline`) : 20 ans au dépôt et
+  21 ans au 1er janvier ; 35 ans au 1er janvier (tous, tant que la fin du
+  programme n'est pas configurée) ; 20 ans au 1er janvier mais 21 au démarrage,
+  si le démarrage est configuré ;
+- zone : Afrique de l'Ouest (16 pays) et de l'Est (18 pays) au sens de l'ONU ;
+- diplôme : date d'obtention la plus tardive des formations déclarées ; 2028 ou
+  après, alerte `graduation_after_cutoff` ; 2027, constat « à vérifier »
+  `graduation_review` qui cite le mois ;
 - nationalité hors zone avec double nationalité déclarée : constat « à
   vérifier », car le formulaire ne donne pas la seconde nationalité ;
 - seuls l'âge et la nationalité sont confrontés aux données ; pour les huit
@@ -75,13 +100,13 @@ Module proposé : `screening/assessment_match.py`. Dépendance : RapidFuzz.
 - Constats : test introuvable, test après la date limite, durée anormalement
   courte.
 
-Acceptation : 38 lignes rattachées au bon candidat, dont les 2 noms inversés ;
-2 tests introuvables, 2 en retard et 2 trop rapides signalés ; aucune erreur de
-rattachement.
+Acceptation (cohorte 2027) : 39 lignes rattachées au bon candidat, dont les
+2 noms inversés ; 1 test introuvable, 2 en retard et 2 trop rapides signalés ;
+aucune erreur de rattachement.
 
 **Fait.** Résultat sur la cohorte de référence, dossiers lus depuis les PDF :
-38 lignes sur 38 rattachées au bon dossier (36 par l'e-mail, 2 par le nom
-inversé), aucune erreur, aucune ligne laissée de côté ; 2 tests introuvables,
+39 lignes sur 39 rattachées au bon dossier (37 par l'e-mail, 2 par le nom
+inversé), aucune erreur, aucune ligne laissée de côté ; 1 test introuvable,
 2 en retard et 2 trop rapides retrouvés ; aucun constat en trop. Commande :
 
 ```bash
@@ -90,8 +115,8 @@ eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scena
 
 La vérité utilisée pour compter les erreurs de rattachement est la colonne
 `email_test` de `scenarios.csv`, ajoutée au générateur pour cette étape.
-Sur les graines 0 à 11 (456 lignes), 453 lignes sont rattachées, aucune au
-mauvais dossier ; 3 sont refusées comme ambiguës (nom inversé d'un candidat qui
+Sur les graines 0 à 11 (468 lignes), 466 lignes sont rattachées, aucune au
+mauvais dossier ; 2 sont refusées comme ambiguës (nom inversé d'un candidat qui
 a un homonyme exact dans la cohorte). Chiffre vérifié par le test
 `test_totals_over_twelve_seeds` (`tests/test_assessment_match.py`).
 
@@ -100,7 +125,10 @@ n'est couvert que par les cas construits à la main dans les tests.
 
 Choix faits, à confirmer avec MEST :
 
-- date limite au 10 août 2025, jour compris (hypothèse du générateur) ;
+- guide 2027 : date limite le 20 juillet à 23 h 59 GMT, plateforme ouverte
+  jusqu'au 22 ; toute soumission après la date limite est signalée (constat
+  « à vérifier » `assessment_late`, et non plus une alerte). Hypothèses : année 2026,
+  dates de l'export en GMT (`assessment.toml`, `timezone`) ;
 - durée anormalement courte : moins de 20 minutes sur 70. Ce constat est « à
   vérifier », pas une alerte : une durée courte n'est pas une preuve de fraude ;
 - seuil de ressemblance des noms à 90/100. Deux personnes différentes peuvent
@@ -370,7 +398,20 @@ Ce qui est construit et reste à décider :
 
 - Client compatible OpenAI, adresse et modèle configurables.
 - Sortie JSON conforme à un modèle Pydantic `Verdict` : note et raison par
-  critère, citation exacte, alertes, verdict proposé.
+  critère, citation exacte, alertes, décision proposée.
+- Guide 2027 : la décision prend trois valeurs (`Interview Invitation`,
+  `Interview Reject`, `Waitlist`) et un booléen distinct,
+  `request_further_review`. Un constat qui écarte selon le guide (âge hors
+  tranche, nationalité hors zone, diplôme en 2028 ou après) fait proposer
+  `Interview Reject` ; tout autre constat, un Concern ou une citation
+  introuvable demande la revue complémentaire sans changer la décision ; sans
+  réponse exploitable du modèle, aucune décision n'est proposée.
+
+**Écrit, non exécuté sur la cohorte 2027.** Le code est testé avec un faux
+serveur compatible OpenAI. Deux verdicts d'essai seulement ont tourné, sur
+l'ancienne cohorte et avec l'ancien modèle de décision ; le critère
+d'acceptation (40 verdicts) n'est pas atteint. Substitut local : Ollama,
+`llama3.2` (3B), environ 100 s par dossier sur processeur.
 - Vérifier chaque citation dans le dossier ; signaler celles qui ne s'y trouvent
   pas mot pour mot.
 - Règle de décision explicite et paramétrable entre notes, alertes et verdict.
@@ -385,9 +426,14 @@ vérifiées mesuré et exporté.
   proposé, décision de l'évaluateur (valider ou modifier, avec commentaire).
 - Journal de chaque décision : qui, quand, verdict proposé, verdict retenu.
 
-**Fait** (`api/`, commandes `eit-api-load` et `eit-api`). Une modification
-exige le verdict retenu et un commentaire ; « modifier » vers le verdict proposé
-est refusé (il faut « valider »). Le journal n'est jamais réécrit : recharger les
+**Écrit, non exécuté de bout en bout** (`api/`, commandes `eit-api-load` et
+`eit-api`) : testé sur SQLite en mémoire, jamais lancé contre PostgreSQL avec de
+vrais verdicts. Une modification
+exige la décision retenue et un commentaire ; une « modification » identique à
+la proposition (décision et revue) est refusée (il faut « valider »). Guide
+2027 : chaque décision garde les valeurs proposées et retenues de la décision
+(trois valeurs) et de la demande de revue complémentaire ; sans décision
+proposée, l'évaluateur en choisit une. Le journal n'est jamais réécrit : recharger les
 verdicts ne touche pas aux décisions. PostgreSQL 16 tourne dans Docker sur
 127.0.0.1:5433 ; les tests utilisent SQLite en mémoire. Pas d'authentification :
 l'évaluateur saisit son nom (Keycloak relève de l'architecture cible).
@@ -399,7 +445,9 @@ l'évaluateur saisit son nom (Keycloak relève de l'architecture cible).
 - Écran 2 : verdict et raisons à gauche, dossier à droite avec les citations
   surlignées ; boutons pour valider ou modifier.
 
-**Fait** (`ui/`, Next.js 16, shadcn/ui). Le tableau se trie par total, alertes,
+**Écrit, non exécuté de bout en bout** (`ui/`, Next.js 16, shadcn/ui) : types
+et lint vérifiés, jamais ouvert dans un navigateur. Ce qui suit décrit le
+comportement prévu. Le tableau se trie par total, alertes,
 Concerns et âge, et se filtre par verdict, statut et genre. L'écran du dossier
 montre la règle appliquée, les constats et Concerns, puis chaque critère avec sa
 note, sa raison et sa citation : « voir dans le dossier » fait défiler le
@@ -413,6 +461,10 @@ affiché sous les boutons.
 - Test contrefactuel de biais : changer le pays (et les lieux) d'un même dossier
   et vérifier que le verdict proposé ne change pas.
 - Export des résultats avec date, version du code, modèle et graine.
+
+**Écrit, non exécuté** (`evaluation/report.py`, `eit-evaluate` ;
+`evaluation/counterfactual.py`, `eit-counterfactual`) : les outils statistiques
+sont testés, mais les deux commandes n'ont jamais tourné, faute de verdicts.
 
 ## Amélioration à prévoir avant le test avec les évaluateurs
 

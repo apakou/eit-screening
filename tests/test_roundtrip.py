@@ -1,5 +1,8 @@
 """Aller-retour : un dossier fictif relu par le module d'import redonne ses données."""
 
+import pytest
+
+from eit_screening.ingestion.smapply_pdf import parse_application
 from eit_screening.synthetic.profiles import ANOMALIES, build_cohort
 
 # Champs comparés un à un entre la référence et le dossier relu.
@@ -53,3 +56,21 @@ def test_same_seed_same_cohort():
     first = [d.application.model_dump() for d in build_cohort(10, seed=7)]
     second = [d.application.model_dump() for d in build_cohort(10, seed=7)]
     assert first == second
+
+
+@pytest.mark.parametrize("application_id", ["EIT-2027-001001", "0000001001"])
+def test_identifier_formats(tmp_path, application_id):
+    """Identifiants du guide 2027 (EIT-2027-XXXXXX) et anciens identifiants à 10 chiffres."""
+    from eit_screening.synthetic.render_pdf import render_dossier
+
+    dossier = build_cohort(1, seed=3)[0]
+    dossier.application.application_id = application_id
+    render_dossier(dossier, tmp_path / "application.pdf")
+    assert parse_application(tmp_path / "application.pdf").application_id == application_id
+
+
+def test_generated_identifiers_follow_the_guide():
+    import re
+
+    ids = [d.application.application_id for d in build_cohort(40, seed=2026)]
+    assert all(re.fullmatch(r"EIT-2027-\d{6}", i) for i in ids) and len(set(ids)) == 40

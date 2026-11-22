@@ -2,19 +2,16 @@
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
-export const VERDICTS = [
-  "Interview Invitation",
-  "Waitlist",
-  "Interview Reject",
-  "Request Final Review",
-] as const;
+// Guide d'évaluation 2027 : trois décisions, et un booléen distinct de revue complémentaire.
+export const VERDICTS = ["Interview Invitation", "Waitlist", "Interview Reject"] as const;
 export type VerdictLabel = (typeof VERDICTS)[number];
 
 export type Status = "à traiter" | "validé" | "modifié";
 
 export interface CandidateSummary {
   pseudonym: string;
-  proposed: VerdictLabel;
+  proposed: VerdictLabel | null;
+  request_further_review: boolean;
   total: number | null;
   max_total: number;
   alerts: number;
@@ -26,6 +23,7 @@ export interface CandidateSummary {
   citizenship: string | null;
   status: Status;
   retained: VerdictLabel | null;
+  retained_review: boolean | null;
 }
 
 export interface QuoteLocation {
@@ -67,8 +65,10 @@ export interface Finding {
 
 export interface Verdict {
   pseudonym: string;
-  proposed: VerdictLabel;
+  proposed: VerdictLabel | null;
+  request_further_review: boolean;
   rule: string;
+  review_reasons: string[];
   total: number | null;
   max_total: number;
   criteria: CriterionResult[];
@@ -93,8 +93,10 @@ export interface Decision {
   pseudonym: string;
   evaluator: string;
   action: "validate" | "modify";
-  proposed: VerdictLabel;
+  proposed: VerdictLabel | null;
   retained: VerdictLabel;
+  proposed_review: boolean;
+  retained_review: boolean;
   comment: string;
   created_at: string;
 }
@@ -129,7 +131,13 @@ export const getCandidate = (pseudonym: string) =>
   request<CandidateDetail>(`/api/candidates/${encodeURIComponent(pseudonym)}`);
 export const postDecision = (
   pseudonym: string,
-  body: { evaluator: string; action: "validate" | "modify"; retained?: VerdictLabel; comment?: string },
+  body: {
+    evaluator: string;
+    action: "validate" | "modify";
+    retained?: VerdictLabel;
+    request_further_review?: boolean;
+    comment?: string;
+  },
 ) =>
   request<Decision>(`/api/candidates/${encodeURIComponent(pseudonym)}/decisions`, {
     method: "POST",

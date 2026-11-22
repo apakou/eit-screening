@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     client = ChatClient(config.llm)
     args.out.mkdir(parents=True, exist_ok=True)
 
-    print(f"{'Pseudonyme':<12} {'Total':>5}  {'Citations':>9}  {'Essais':>6} {'Durée':>6}  Verdict proposé")
+    print(f"{'Pseudonyme':<12} {'Total':>5}  {'Citations':>9}  {'Essais':>6} {'Durée':>6}  Décision proposée (revue)")
     verdicts = []
     for dossier in dossiers:
         evidence = {} if args.dossier_entier else retriever.for_criteria(
@@ -105,20 +105,23 @@ def main(argv: list[str] | None = None) -> int:
         )
         total = "-" if verdict.total is None else str(verdict.total)
         print(f"{verdict.pseudonym:<12} {total:>5}  {verdict.quotes_verified:>4}/{verdict.quotes_total:<4}  "
-              f"{verdict.llm.attempts:>6} {verdict.llm.seconds:>5.0f}s  {verdict.proposed}")
+              f"{verdict.llm.attempts:>6} {verdict.llm.seconds:>5.0f}s  {verdict.proposed or 'aucune'}"
+              + ("  + revue complémentaire" if verdict.request_further_review else ""))
 
     valid = sum(v.llm.schema_valid for v in verdicts)
     quotes = sum(v.quotes_total for v in verdicts)
     verified = sum(v.quotes_verified for v in verdicts)
     seconds = sum(v.llm.seconds for v in verdicts)
-    distribution = Counter(v.proposed for v in verdicts)
+    distribution = Counter(v.proposed or "aucune" for v in verdicts)
+    review = sum(v.request_further_review for v in verdicts)
     # Note supérieure à 0 sans aucune citation : raison non appuyée par le dossier.
     unsupported = sum(1 for v in verdicts for c in v.criteria if c.score > 0 and not c.quote)
     scored = sum(1 for v in verdicts for c in v.criteria if c.score > 0)
     print(f"\n{len(verdicts)} verdicts ; conformes au schéma : {valid}/{len(verdicts)} ; "
           f"citations vérifiées mot pour mot : {verified}/{quotes}"
           + (f" ({verified / quotes:.1%})" if quotes else "") + f" ; {seconds / len(verdicts):.0f} s par dossier.")
-    print("Verdicts proposés : " + ", ".join(f"{k} {v}" for k, v in sorted(distribution.items())))
+    print("Décisions proposées : " + ", ".join(f"{k} {v}" for k, v in sorted(distribution.items()))
+          + f" ; revue complémentaire demandée : {review}/{len(verdicts)}.")
     print(f"Notes supérieures à 0 sans citation : {unsupported}/{scored}.")
     summary = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -138,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         "scores_without_quote": unsupported,
         "scores_above_zero": scored,
         "verdicts": dict(sorted(distribution.items())),
+        "request_further_review": review,
     }
     summary_path = args.resume or args.out / "_resume.json"
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")

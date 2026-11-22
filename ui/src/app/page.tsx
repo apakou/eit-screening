@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { StatusBadge, VerdictBadge } from "@/components/verdict-badge";
+import { ReviewBadge, StatusBadge, VerdictBadge } from "@/components/verdict-badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type CandidateSummary, listCandidates, VERDICTS } from "@/lib/api";
 
@@ -16,6 +16,7 @@ export default function CandidatesPage() {
   const [rows, setRows] = useState<CandidateSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [verdict, setVerdict] = useState("");
+  const [review, setReview] = useState("");
   const [status, setStatus] = useState("");
   const [gender, setGender] = useState("");
   const [search, setSearch] = useState("");
@@ -31,7 +32,8 @@ export default function CandidatesPage() {
     if (!rows) return [];
     const filtered = rows.filter(
       (r) =>
-        (!verdict || r.proposed === verdict) &&
+        (!verdict || (verdict === "aucune" ? r.proposed === null : r.proposed === verdict)) &&
+        (!review || r.request_further_review === (review === "oui")) &&
         (!status || r.status === status) &&
         (!gender || r.gender === gender) &&
         (!search || r.pseudonym.toLowerCase().includes(search.toLowerCase())),
@@ -42,7 +44,7 @@ export default function CandidatesPage() {
       const order = x < y ? -1 : x > y ? 1 : 0;
       return sort.desc ? -order : order;
     });
-  }, [rows, verdict, status, gender, search, sort]);
+  }, [rows, verdict, review, status, gender, search, sort]);
 
   const toggle = (key: SortKey) =>
     setSort((current) => ({ key, desc: current.key === key ? !current.desc : key !== "pseudonym" }));
@@ -75,11 +77,17 @@ export default function CandidatesPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <select aria-label="Verdict proposé" className={selectClass} value={verdict} onChange={(e) => setVerdict(e.target.value)}>
-            <option value="">Tous les verdicts</option>
+          <select aria-label="Décision proposée" className={selectClass} value={verdict} onChange={(e) => setVerdict(e.target.value)}>
+            <option value="">Toutes les décisions</option>
             {VERDICTS.map((v) => (
               <option key={v}>{v}</option>
             ))}
+            <option value="aucune">Aucune décision proposée</option>
+          </select>
+          <select aria-label="Revue complémentaire" className={selectClass} value={review} onChange={(e) => setReview(e.target.value)}>
+            <option value="">Revue : toutes</option>
+            <option value="oui">Revue demandée</option>
+            <option value="non">Sans revue</option>
           </select>
           <select aria-label="Statut" className={selectClass} value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Tous les statuts</option>
@@ -106,7 +114,7 @@ export default function CandidatesPage() {
           <TableHeader>
             <TableRow>
               {header("pseudonym", "Pseudonyme")}
-              <TableHead>Verdict proposé</TableHead>
+              <TableHead>Décision proposée</TableHead>
               {header("total", "Total", "text-right")}
               {header("alerts", "Alertes", "text-right")}
               {header("concerns", "Concerns", "text-right")}
@@ -114,7 +122,7 @@ export default function CandidatesPage() {
               {header("age", "Âge", "text-right")}
               <TableHead>Nationalité</TableHead>
               <TableHead>Statut</TableHead>
-              <TableHead>Verdict retenu</TableHead>
+              <TableHead>Décision retenue</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -126,7 +134,10 @@ export default function CandidatesPage() {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <VerdictBadge verdict={r.proposed} />
+                  <div className="flex flex-wrap gap-1">
+                    <VerdictBadge verdict={r.proposed} />
+                    <ReviewBadge review={r.request_further_review} />
+                  </div>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {r.total ?? "–"} / {r.max_total}
@@ -143,7 +154,16 @@ export default function CandidatesPage() {
                 <TableCell>
                   <StatusBadge status={r.status} />
                 </TableCell>
-                <TableCell>{r.retained ? <VerdictBadge verdict={r.retained} /> : "–"}</TableCell>
+                <TableCell>
+                  {r.retained ? (
+                    <div className="flex flex-wrap gap-1">
+                      <VerdictBadge verdict={r.retained} />
+                      <ReviewBadge review={r.retained_review} />
+                    </div>
+                  ) : (
+                    "–"
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {rows && shown.length === 0 && (

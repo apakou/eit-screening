@@ -106,7 +106,8 @@ def verdict_summary(verdicts: dict[str, dict], tiers: dict[str, str]) -> dict:
         "quote_verification_rate": round(verified / quotes, 4) if quotes else None,
         "scores_without_quote": sum(1 for v in verdicts.values() for c in v["criteria"] if c["score"] > 0 and not c["quote"]),
         "scores_above_zero": sum(1 for v in verdicts.values() for c in v["criteria"] if c["score"] > 0),
-        "proposed": dict(sorted(Counter(v["proposed"] for v in verdicts.values()).items())),
+        "proposed": dict(sorted(Counter(v["proposed"] or "aucune" for v in verdicts.values()).items())),
+        "request_further_review": sum(v["request_further_review"] for v in verdicts.values()),
         "seconds_per_dossier": round(sum(v["llm"]["seconds"] for v in verdicts.values()) / len(verdicts), 1),
         "mean_total_by_tier": {t: round(sum(s) / len(s), 1) for t, s in sorted(by_tier.items())},
         "spearman_tier_total": spearman([p[0] for p in pairs], [p[1] for p in pairs]),
@@ -181,8 +182,9 @@ def main(argv: list[str] | None = None) -> int:
         signals["generic_ai_answers"] = {
             to_id[p] for p, v in rag.items() if p in to_id and any(c["key"] == "generic_ai_responses" for c in v["concerns"])
         }
-    keep = {"age_out_of_range", "citizenship_outside_region", "assessment_not_found", "assessment_late",
-            "assessment_too_fast", "assessment_name_swapped", "generic_ai_answers"}
+    keep = {"age_out_of_range", "age_borderline", "citizenship_outside_region", "graduation_after_cutoff",
+            "graduation_review", "assessment_not_found", "assessment_late", "assessment_too_fast",
+            "assessment_name_swapped", "generic_ai_answers"}
     detection = anomaly_detection(scenarios, {k: v for k, v in signals.items() if k in keep})
 
     leaks = []
@@ -266,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
               f"{v['quotes_verified']}/{v['quotes_total']}" + (f" ({rate:.1%})" if rate is not None else "")
               + f", {v['seconds_per_dossier']} s/dossier, total moyen par niveau {v['mean_total_by_tier']}, "
               f"Spearman niveau-total {v['spearman_tier_total']}.")
-        print(f"  verdicts proposés : {v['proposed']} ; notes > 0 sans citation : "
+        print(f"  décisions proposées : {v['proposed']}, revue demandée {v['request_further_review']} ; notes > 0 sans citation : "
               f"{v['scores_without_quote']}/{v['scores_above_zero']}")
     if agreement:
         print(f"Accord des deux variantes : {agreement['same_verdict']:.1%} (kappa {agreement['cohen_kappa']}).")

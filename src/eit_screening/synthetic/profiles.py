@@ -28,11 +28,16 @@ from ..models import (
 from . import content as C
 from . import form_text as F
 
-# Paramètres de la cohorte fictive, calqués sur le formulaire « Class of 2026 ».
-AGE_REFERENCE = date(2026, 1, 1)  # début du programme
-AGE_MIN, AGE_MAX = 21, 30
-ASSESSMENT_DEADLINE = date(2025, 8, 10)  # hypothèse : la vraie date limite reste à confirmer
-ASSESSMENT_MINUTES = 70
+# Paramètres de la cohorte fictive, calqués sur le guide d'évaluation de la
+# promotion 2027 (âge 21-35 au 1er janvier 2027, Afrique de l'Ouest ou de l'Est,
+# test ClassMarker à rendre le 20 juillet 23 h 59 GMT, plateforme ouverte
+# jusqu'au 22). L'année 2026 du test est une hypothèse.
+AGE_REFERENCE = date(2027, 1, 1)
+AGE_MIN, AGE_MAX = 21, 35
+ASSESSMENT_DEADLINE = date(2026, 7, 20)  # jour compris, jusqu'à 23 h 59 GMT
+PLATFORM_CLOSE = date(2026, 7, 22)
+ASSESSMENT_MINUTES = 70  # hypothèse : durée du test ClassMarker non donnée par le guide
+ID_PREFIX = "EIT-2027-"
 UPLOAD_BASE_URL = "https://apply.example.org/protected"
 
 TIERS = ("fort", "moyen", "faible")
@@ -44,20 +49,20 @@ ANOMALIES: dict[str, str] = {
     "assessment_too_fast": "Test terminé en un temps anormalement court avec un score élevé",
     "generic_ai_answers": "Réponses libres génériques, sans aucun fait personnel",
     "age_out_of_range": "Date de naissance hors de la tranche d'âge, malgré la réponse « Yes »",
-    "citizenship_outside_region": "Nationalité hors Afrique de l'Ouest, malgré la réponse « Yes »",
+    "age_borderline": "20 ans au dépôt et 21 ans au 1er janvier 2027, ou 35 ans au 1er janvier 2027",
+    "citizenship_outside_region": "Nationalité hors Afrique de l'Ouest et de l'Est, malgré la réponse « Yes »",
+    "graduation_after_cutoff": "Diplôme obtenu en 2028 : écarté par le guide",
+    "graduation_review": "Diplôme obtenu en 2027 : mois à examiner",
     "missing_resume": "CV non fourni",
     "poor_audio": "Vidéo de présentation presque inaudible",
 }
-# Les anomalies les plus courantes reviennent une seconde fois.
+# Composition de la cohorte de 40 (16 anomalies) : chaque anomalie une fois, et
+# quatre une seconde fois (voir docs/feuille-de-route.md).
 _ANOMALY_SEQUENCE = list(ANOMALIES) + [
     "assessment_name_swapped",
-    "generic_ai_answers",
     "assessment_late",
     "assessment_too_fast",
-    "assessment_not_found",
     "age_out_of_range",
-    "generic_ai_answers",
-    "assessment_name_swapped",
 ]
 
 
@@ -71,7 +76,9 @@ class Scenario:
 
     @property
     def expected_eligible(self) -> bool:
-        return not (self.has("age_out_of_range") or self.has("citizenship_outside_region"))
+        return not (
+            self.has("age_out_of_range") or self.has("citizenship_outside_region") or self.has("graduation_after_cutoff")
+        )
 
 
 @dataclass
@@ -177,7 +184,7 @@ def _person(rng: random.Random, group: str, gender: str | None = None) -> tuple[
 def build_dossier(number: int, scenario: Scenario, rng: random.Random, picker: _Picker) -> Dossier:
     tier = scenario.tier
     voice = "generique" if scenario.has("generic_ai_answers") else tier
-    application_id = f"{number:010d}"
+    application_id = f"{ID_PREFIX}{number:06d}"
 
     # --- Identité -----------------------------------------------------------
     gender = rng.choices(["Male", "Female"], weights=(55, 45))[0]
@@ -201,12 +208,20 @@ def build_dossier(number: int, scenario: Scenario, rng: random.Random, picker: _
     else:
         interview_city = "Accra"
 
-    age = rng.choice([22, 23, 24, 24, 25, 25, 26, 26, 27, 28, 29, 30, 21])
+    # Dossiers réguliers : 22 à 34 ans, loin des bornes signalées par le guide.
+    age = rng.choice([22, 23, 24, 24, 25, 25, 26, 26, 27, 28, 29, 30, 31, 32, 33, 34])
     if scenario.has("age_out_of_range"):
-        age = rng.choice([19, 20, 31, 32, 33])
+        age = rng.choice([19, 20, 36, 37])
     # Né après le 1er janvier : l'âge à la date de référence vaut exactement ``age``.
     birth_year = AGE_REFERENCE.year - 1 - age
     date_of_birth = date(birth_year, 1, 2) + timedelta(days=rng.randrange(360))
+    if scenario.has("age_borderline"):
+        if rng.random() < 0.5:
+            # 21 ans au 1er janvier 2027, mais 20 ans au dépôt (juin-juillet 2026).
+            date_of_birth = date(AGE_REFERENCE.year - 1 - AGE_MIN, 8, 1) + timedelta(days=rng.randrange(150))
+        else:
+            # 35 ans au 1er janvier 2027 : atteindra 36 ans pendant le programme.
+            date_of_birth = date(AGE_REFERENCE.year - 1 - AGE_MAX, 1, 2) + timedelta(days=rng.randrange(360))
 
     handle = f"{_slug(first_name)}.{_slug(last_name)}{rng.randrange(10, 99)}"
     email = f"{handle}@{rng.choice(C.EMAIL_DOMAINS)}"
@@ -243,7 +258,11 @@ def build_dossier(number: int, scenario: Scenario, rng: random.Random, picker: _
     training = None
     if rng.random() < {"fort": 0.8, "moyen": 0.5, "faible": 0.15}[tier]:
         training = rng.choice(C.TRAININGS)
-    graduation = _random_date(date(2020, 6, 1), date(2025, 9, 30), rng)
+    graduation = _random_date(date(2020, 6, 1), date(2026, 6, 30), rng)
+    if scenario.has("graduation_review"):
+        graduation = _random_date(date(2027, 1, 1), date(2027, 12, 31), rng)
+    elif scenario.has("graduation_after_cutoff"):
+        graduation = _random_date(date(2028, 1, 1), date(2028, 12, 31), rng)
     education = Education(
         degree=rng.choice(C.DEGREES),
         major=major,
@@ -259,7 +278,7 @@ def build_dossier(number: int, scenario: Scenario, rng: random.Random, picker: _
     organisations = rng.sample(C.ORGANISATIONS, experience_count)
     experiences: list[WorkExperience] = []
     current = rng.random() < 0.6
-    start = _random_date(date(2023, 1, 1), date(2025, 5, 31), rng)
+    start = _random_date(date(2023, 1, 1), date(2026, 4, 30), rng)
     first = WorkExperience(
         organisation=organisations[0],
         job_title=rng.choice(C.JOB_TITLES[tier]),
@@ -269,7 +288,7 @@ def build_dossier(number: int, scenario: Scenario, rng: random.Random, picker: _
     )
     if not current:
         months = rng.randint(3, 14)
-        first.end_date = min(start + timedelta(days=30 * months), date(2025, 6, 30))
+        first.end_date = min(start + timedelta(days=30 * months), date(2026, 5, 31))
         first.duration_months = max(1, round((first.end_date - start).days / 30))
     experiences.append(first)
     if experience_count == 2:
@@ -319,11 +338,12 @@ def build_dossier(number: int, scenario: Scenario, rng: random.Random, picker: _
     reflection = picker.take(f"reflection:{reflection_voice}", C.REFLECTION[reflection_voice])
 
     # --- Calendrier de la candidature -----------------------------------------
-    screening_day = _random_date(date(2025, 6, 20), date(2025, 7, 25), rng)
+    screening_day = _random_date(date(2026, 6, 10), date(2026, 7, 5), rng)
     form_day = screening_day + timedelta(days=rng.randint(2, 12))
     assessment_day = min(form_day + timedelta(days=rng.randint(1, 8)), ASSESSMENT_DEADLINE)
     if scenario.has("assessment_late"):
-        assessment_day = ASSESSMENT_DEADLINE + timedelta(days=rng.randint(1, 6))
+        # Après la date limite, mais avant la fermeture de la plateforme (21 ou 22 juillet).
+        assessment_day = ASSESSMENT_DEADLINE + timedelta(days=rng.randint(1, (PLATFORM_CLOSE - ASSESSMENT_DEADLINE).days))
     submitted = datetime(
         assessment_day.year, assessment_day.month, assessment_day.day,
         rng.randint(7, 23), rng.randint(0, 59),

@@ -38,7 +38,22 @@ Le code doit donc produire ses premiers chiffres avant le 6 décembre.
 ## Décisions prises
 
 - **Périmètre.** Revue des candidatures et présélection uniquement. Le système
-  propose un verdict et ses raisons ; MEST décide.
+  propose une décision et ses raisons ; MEST décide.
+- **Guide d'évaluation 2027** (reçu le 22 novembre 2026). Il remplace le
+  formulaire 2026 comme référence et tranche les contradictions ci-dessous. Il
+  fixe aussi :
+  - la **décision** : trois valeurs (`Interview Invitation`,
+    `Interview Reject`, `Waitlist`) et un booléen distinct,
+    `request_further_review` ; « Request Final Review » n'est plus un verdict ;
+  - le **diplôme** : obtenu en 2028 ou après, la candidature est écartée ; en
+    2027, elle est signalée pour examen du mois d'obtention ;
+  - le **test** : ClassMarker, date limite le 20 juillet à 23 h 59 GMT,
+    plateforme ouverte jusqu'au 22 juillet, toute soumission après le 20
+    signalée ;
+  - les **identifiants** de candidature : `EIT-2027-XXXXXX` ;
+  - une **grille sur 40 points** dont il nomme les domaines.
+  « Écarté » se traduit par une décision proposée `Interview Reject` ; le
+  système ne décide toujours pas seul, l'évaluateur valide ou modifie.
 - **Prototype réduit.** On construit le pipeline, une API et une interface à
   deux écrans. Le reste de la pile décrite dans le mémoire est présenté comme
   architecture cible.
@@ -68,34 +83,53 @@ Le code doit donc produire ses premiers chiffres avant le 6 décembre.
 | Docker Compose | Oui | Kubernetes |
 | Keycloak, Celery et Redis, SeaweedFS, Langfuse, Prometheus | Non | Oui |
 
-## Contradictions à faire trancher par MEST
+## Contradictions tranchées par le guide 2027
 
-Le formulaire réel de la cohorte 2026 et le texte du mémoire ne disent pas la
-même chose. Tant que MEST n'a pas répondu, le code suit le formulaire 2026 et
-garde ces valeurs paramétrables.
+Le formulaire réel de la cohorte 2026 et le texte du mémoire ne disaient pas la
+même chose. Le guide d'évaluation 2027 tranche ; le code le suit et garde ces
+valeurs paramétrables.
 
-| Point | Formulaire 2026 | Mémoire |
-|---|---|---|
-| Test technique | TestGorilla, 70 minutes | ClassMarker |
-| Âge | 21 à 30 ans | 21 à 35 ans |
-| Citoyenneté | Afrique de l'Ouest | Afrique de l'Est ou de l'Ouest |
-| Programme | Janvier à décembre 2026, dont 7 mois à Accra | 12 mois à Accra, engagements en 2027 |
+| Point | Formulaire 2026 | Mémoire | Guide 2027 (retenu) |
+|---|---|---|---|
+| Test technique | TestGorilla, 70 minutes | ClassMarker | ClassMarker, date limite 20 juillet 23 h 59 GMT |
+| Âge | 21 à 30 ans | 21 à 35 ans | 21 à 35 ans au 1er janvier 2027, cas limites signalés |
+| Citoyenneté | Afrique de l'Ouest | Afrique de l'Est ou de l'Ouest | Afrique de l'Ouest ou de l'Est |
+| Programme | Janvier à décembre 2026, dont 7 mois à Accra | 12 mois à Accra, engagements en 2027 | Dates non données |
+
+Hypothèses prises pour appliquer le guide, à confirmer avec MEST :
+
+- **Âge.** Le guide signale sans l'écarter « un candidat de 20 ans qui aura
+  21 ans au démarrage » et « un de 35 ans qui pourrait atteindre 36 ans pendant
+  le programme ». Il ne donne ni le démarrage ni la fin du programme. Le code
+  signale (constat « à vérifier ») : 20 ans au dépôt et 21 ans au 1er janvier
+  2027 ; 20 ans au 1er janvier mais 21 ans au démarrage, si une date de
+  démarrage est configurée ; 35 ans au 1er janvier, comparé à la fin du
+  programme si elle est configurée, sinon tous (`eligibility.toml`,
+  `program_start`, `program_end`).
+- **Afrique de l'Est.** Liste de l'ONU (18 pays), comme pour l'Afrique de
+  l'Ouest. Elle diffère de la Communauté d'Afrique de l'Est (EAC) : la RDC est
+  dans l'EAC mais pas dans la liste ; Éthiopie, Zambie, Zimbabwe, Malawi,
+  Mozambique, Madagascar, Maurice, Seychelles, Comores, Djibouti et Érythrée
+  sont dans la liste mais pas dans l'EAC.
+- **Année du test.** 2026 (20 juillet 2026), pour une promotion qui commence
+  en 2027.
+- **Fuseau horaire de l'export ClassMarker.** GMT par défaut.
+- **Durée du test ClassMarker.** Non donnée ; 70 minutes gardées (durée
+  TestGorilla 2026), seuil de durée anormale à 20 minutes.
 
 ## Ce qui manque encore
 
-- **Guide d'évaluation de MEST.** Le mémoire cite une grille sur 40 points en
-  quatre critères notés sur 10 (Resume & Technical Experience, Entrepreneurial
-  Motivation & Vision, Communication & Clarity, Program Fit & Collaboration) et
-  8 Concerns. Seuls trois noms de Concerns sont connus : « Assessment not
-  found », « Assessment concerns », « Generic AI responses ». La liste complète
-  et les repères de notation restent à obtenir.
+- **Domaines de la grille du guide 2027.** Le guide note sur 40 points des
+  domaines qu'il nomme, mais leurs noms (et une éventuelle pondération) n'ont
+  pas encore été transmis. `grille.toml` garde les quatre critères notés sur 10
+  du mémoire (Resume & Technical Experience, Entrepreneurial Motivation &
+  Vision, Communication & Clarity, Program Fit & Collaboration), marqués comme
+  provisoires ; aucune pondération ne doit être inventée.
+- **Concerns.** Le mémoire en annonce 8 ; seuls trois noms sont connus :
+  « Assessment not found », « Assessment concerns », « Generic AI responses ».
 - **Seuils de décision.** Rien ne dit à partir de quelle note un candidat est
-  invité en entretien.
-- **Format de l'export du test** (colonnes, format des dates), date limite
-  réelle du test (hypothèse : 10 août 2025) et durée en dessous de laquelle un
-  test est suspect (hypothèse : 20 minutes sur 70).
-- **Date de calcul de l'âge** (hypothèse : 1er janvier 2026) et **liste des
-  pays** retenue pour « Afrique de l'Ouest » (hypothèse : les 16 pays de l'ONU).
+  invité en entretien (hypothèses : 28 et 20 sur 40, `verdict.toml`).
+- **Format de l'export ClassMarker** (colonnes, format et fuseau des dates).
 - **Accord écrit de MEST** pour l'envoi de texte anonymisé à un modèle hébergé.
 - **Accès aux vidéos.** L'export ne contient que des liens protégés. Le module
   attend les vidéos à côté du PDF (`personal_statement.mp4`,

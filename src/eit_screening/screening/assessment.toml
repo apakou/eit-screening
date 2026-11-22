@@ -1,14 +1,18 @@
 # Paramètres de l'appariement avec l'export de la plateforme de test.
 #
-# Le format réel de l'export n'est pas connu : les noms de colonnes ci-dessous
-# décrivent le fichier fabriqué par eit-generate (assessment_results.csv).
-# Quand MEST fournira un vrai export, adapter cette section, pas le code.
+# Guide 2027 : le test se passe sur ClassMarker. Le format réel de l'export
+# ClassMarker n'est pas connu : les noms de colonnes ci-dessous décrivent le
+# fichier fabriqué par eit-generate (assessment_results.csv). Quand MEST
+# fournira un vrai export, adapter cette section, pas le code.
 
 [export]
 delimiter = ","
 encoding = "utf-8"
 # Format de la date de fin du test (codes strftime). Vide : ISO 8601.
 datetime_format = ""
+# Fuseau horaire des dates de l'export quand elles n'en indiquent pas.
+# HYPOTHÈSE : GMT, comme la date limite du guide.
+timezone = "UTC"
 
 [export.columns]
 first_name = "first_name"
@@ -19,12 +23,17 @@ time_taken_minutes = "time_taken_minutes"
 completed_at = "completed_at"
 
 [deadline]
-# Dernier jour pour passer le test, compris. Hypothèse reprise du générateur
-# de dossiers fictifs ; la vraie date limite reste à obtenir de MEST.
-last_day = 2025-08-10
+# Guide 2027 : date limite le 20 juillet à 23 h 59 GMT ; toute soumission après
+# est signalée (constat « à vérifier »). HYPOTHÈSE sur l'année : 2026, pour une
+# promotion qui commence en 2027.
+deadline = 2026-07-20T23:59:59Z
+# La plateforme reste ouverte jusqu'au 22 juillet : une soumission du 21 ou du 22
+# est possible, et signalée. Information seulement (bornes du générateur).
+platform_close = 2026-07-22T23:59:59Z
 
 [duration]
-# Durée prévue du test (formulaire 2026 : TestGorilla, 70 minutes).
+# Durée prévue du test. HYPOTHÈSE : 70 minutes, durée du test TestGorilla du
+# formulaire 2026 ; la durée du test ClassMarker n'est pas donnée par le guide.
 allotted_minutes = 70
 # En dessous, la durée est signalée comme anormalement courte. Hypothèse :
 # environ 30 % du temps prévu. À recaler sur les durées réelles.

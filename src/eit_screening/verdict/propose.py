@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import NamedTuple
 
 from ..grid import Grid
 from ..privacy.anonymize import AnonymizedDossier
@@ -186,27 +187,42 @@ def concerns_from_findings(findings: list[Finding], grid: Grid) -> list[ConcernR
     return result
 
 
+class Decision(NamedTuple):
+    proposed: VerdictLabel | None
+    request_further_review: bool
+    rule: str
+    review_reasons: list[str]
+
+
 def decide(
     total: int | None, findings: list[Finding], concerns: list[ConcernResult], unverified: int,
     schema_valid: bool, rule: DecisionRule,
-) -> tuple[VerdictLabel, str]:
-    """Règle explicite ; renvoie le verdict proposé et la raison de la règle appliquée."""
-    alerts = [f for f in findings if f.severity == "alert"]
-    if rule.review_on_alert and alerts:
-        codes = ", ".join(sorted({f.code for f in alerts}))
-        return "Request Final Review", f"Constat bloquant à examiner ({codes})."
+) -> Decision:
+    """Règle explicite : décision proposée (trois valeurs ou aucune) et revue complémentaire."""
+    exclusions = sorted({f.code for f in findings if f.severity == "alert" and f.code in rule.exclusion_codes})
+    others = sorted({f.code for f in findings if f.code not in exclusions})
+    reasons: list[str] = []
+    if rule.review_on_findings and others:
+        reasons.append(f"constats signalés ({', '.join(others)})")
+    if rule.review_on_concerns and concerns:
+        reasons.append(f"Concerns ({', '.join(sorted({c.key for c in concerns}))})")
+    if schema_valid and unverified > rule.max_unverified_quotes:
+        reasons.append(f"{unverified} citation(s) introuvable(s) mot pour mot")
     if not schema_valid or total is None:
-        return "Request Final Review", "Le modèle n'a pas rendu de réponse conforme : aucune note à proposer."
-    if unverified > rule.max_unverified_quotes:
-        return "Request Final Review", f"{unverified} citation(s) introuvable(s) mot pour mot dans le dossier."
+        reasons.append("pas de réponse conforme du modèle")
+
+    if exclusions:
+        return Decision("Interview Reject", bool(reasons),
+                        f"Candidature écartée par le guide ({', '.join(exclusions)}).", reasons)
+    if not schema_valid or total is None:
+        return Decision(None, True, "Aucune note exploitable : aucune décision proposée.", reasons)
     if total >= rule.invite_min:
-        if rule.review_invite_with_concern and concerns:
-            keys = ", ".join(sorted({c.key for c in concerns}))
-            return "Request Final Review", f"Total {total} suffisant pour l'entretien, mais Concern à examiner ({keys})."
-        return "Interview Invitation", f"Total {total} ≥ {rule.invite_min}."
-    if total >= rule.waitlist_min:
-        return "Waitlist", f"Total {total} entre {rule.waitlist_min} et {rule.invite_min - 1}."
-    return "Interview Reject", f"Total {total} < {rule.waitlist_min}."
+        proposed, text = "Interview Invitation", f"Total {total} ≥ {rule.invite_min}."
+    elif total >= rule.waitlist_min:
+        proposed, text = "Waitlist", f"Total {total} entre {rule.waitlist_min} et {rule.invite_min - 1}."
+    else:
+        proposed, text = "Interview Reject", f"Total {total} < {rule.waitlist_min}."
+    return Decision(proposed, bool(reasons), text, reasons)
 
 
 def propose(
@@ -256,11 +272,13 @@ def propose(
             )
     quoted = [c for c in criteria if c.quote]
     unverified = sum(not c.quote_verified for c in quoted)
-    proposed, rule = decide(total, findings, concerns, unverified, result.content is not None, config.decision)
+    decision = decide(total, findings, concerns, unverified, result.content is not None, config.decision)
     verdict = Verdict(
         pseudonym=dossier.pseudonym,
-        proposed=proposed,
-        rule=rule,
+        proposed=decision.proposed,
+        request_further_review=decision.request_further_review,
+        rule=decision.rule,
+        review_reasons=decision.review_reasons,
         total=total,
         max_total=grid.total_points,
         criteria=criteria,

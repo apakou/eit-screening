@@ -113,7 +113,7 @@ def test_no_valid_answer_means_review():
     client, _ = _client("x", "y", "z")
     verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG)
     assert not verdict.llm.schema_valid and verdict.total is None
-    assert verdict.proposed == "Request Final Review"
+    assert verdict.proposed is None and verdict.request_further_review
 
 
 def test_invented_quote_is_flagged_and_blocks_the_proposal():
@@ -121,7 +121,9 @@ def test_invented_quote_is_flagged_and_blocks_the_proposal():
     verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG)
     assert verdict.quotes_verified == 0 and verdict.quotes_total == 4
     assert not any(c.quote_verified for c in verdict.criteria)
-    assert verdict.proposed == "Request Final Review" and "introuvable" in verdict.rule
+    # La décision suit les notes, mais la revue complémentaire est demandée.
+    assert verdict.proposed == "Interview Invitation" and verdict.request_further_review
+    assert any("introuvable" in r for r in verdict.review_reasons)
 
 
 def test_scores_are_clamped_to_the_grid():
@@ -134,15 +136,25 @@ def test_generic_answers_become_a_concern():
     client, _ = _client(_answer(generic=True))
     verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG)
     assert [c.key for c in verdict.concerns] == ["generic_ai_responses"]
-    assert verdict.proposed == "Request Final Review"  # total suffisant mais Concern à examiner
+    assert verdict.proposed == "Interview Invitation" and verdict.request_further_review
 
 
 def test_findings_from_earlier_steps():
-    late = Finding(code="assessment_late", severity="alert", message="Test en retard.")
+    late = Finding(code="assessment_late", severity="to_check", message="Test soumis après le 20 juillet.")
     client, _ = _client(_answer())
     verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG, findings=[late])
-    assert verdict.proposed == "Request Final Review" and "assessment_late" in verdict.rule
+    assert verdict.proposed == "Interview Invitation" and verdict.request_further_review
+    assert any("assessment_late" in r for r in verdict.review_reasons)
     assert [c.key for c in verdict.concerns] == ["assessment_concerns"]
+
+
+@pytest.mark.parametrize("code", ["age_out_of_range", "citizenship_outside_region", "graduation_after_cutoff"])
+def test_guide_exclusions_propose_a_reject(code):
+    excluded = Finding(code=code, severity="alert", message="Écarté par le guide.")
+    client, _ = _client(_answer())
+    verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG, findings=[excluded])
+    assert verdict.proposed == "Interview Reject" and code in verdict.rule
+    assert verdict.total == 30  # les notes restent affichées
 
 
 # --- Règle de décision ------------------------------------------------------------
@@ -156,18 +168,35 @@ RULE = CONFIG.decision
      (RULE.waitlist_min, "Waitlist"), (RULE.waitlist_min - 1, "Interview Reject"), (0, "Interview Reject")],
 )
 def test_thresholds(total, expected):
-    assert decide(total, [], [], 0, True, RULE)[0] == expected
+    decision = decide(total, [], [], 0, True, RULE)
+    assert decision.proposed == expected and not decision.request_further_review
 
 
-def test_warning_findings_do_not_block():
-    note = Finding(code="age_unknown", severity="to_check", message="Date illisible.")
-    assert decide(35, [note], [], 0, True, RULE)[0] == "Interview Invitation"
+def test_flagged_findings_ask_for_review_without_changing_the_decision():
+    for code in ("age_borderline", "graduation_review", "assessment_late", "eligibility_answer_no"):
+        note = Finding(code=code, severity="to_check", message="Signalé.")
+        decision = decide(35, [note], [], 0, True, RULE)
+        assert decision.proposed == "Interview Invitation" and decision.request_further_review, code
 
 
-def test_concern_only_blocks_an_invitation():
+def test_dual_citizenship_is_not_an_exclusion():
+    dual = Finding(code="citizenship_outside_region", severity="to_check", message="Double nationalité.")
+    decision = decide(35, [dual], [], 0, True, RULE)
+    assert decision.proposed == "Interview Invitation" and decision.request_further_review
+
+
+def test_concern_asks_for_review():
     concern = ConcernResult(key="assessment_concerns", name="Assessment concerns", source="contrôle", detail="x")
-    assert decide(35, [], [concern], 0, True, RULE)[0] == "Request Final Review"
-    assert decide(10, [], [concern], 0, True, RULE)[0] == "Interview Reject"
+    assert decide(35, [], [concern], 0, True, RULE)[:2] == ("Interview Invitation", True)
+    assert decide(10, [], [concern], 0, True, RULE)[:2] == ("Interview Reject", True)
+
+
+def test_only_three_decisions():
+    from typing import get_args
+
+    from eit_screening.verdict.models import VerdictLabel
+
+    assert set(get_args(VerdictLabel)) == {"Interview Invitation", "Interview Reject", "Waitlist"}
 
 
 # --- Ce qui part vers le modèle -------------------------------------------------------

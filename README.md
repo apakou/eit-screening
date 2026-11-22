@@ -74,15 +74,20 @@ eit-eligibility data/fictifs/dossiers --scenarios data/fictifs/scenarios.csv -o 
 ```
 
 Pour chaque dossier, le module calcule l'âge à la date de référence, vérifie
-que la nationalité appartient à la zone et relève chaque réponse « No » aux
-questions d'éligibilité. Il produit des **constats**, jamais un rejet : chaque
+que la nationalité appartient à la zone, contrôle l'année d'obtention du diplôme
+et relève chaque réponse « No » aux questions d'éligibilité. Les règles suivent
+le guide d'évaluation 2027 (21 à 35 ans au 1er janvier 2027, Afrique de l'Ouest
+ou de l'Est, diplôme avant 2028). Il produit des **constats**, jamais un rejet : chaque
 constat a un code, une gravité (`alerte` ou `à vérifier`), un message et les
 réponses du dossier qui le montrent, citées telles quelles.
 
 | Code | Gravité | Cas |
 |---|---|---|
 | `age_out_of_range` | alerte | Âge hors tranche |
+| `age_borderline` | à vérifier | Âge limite signalé par le guide 2027 (20 ans au dépôt, 35 ans) |
 | `age_unknown` | à vérifier | Date de naissance absente ou illisible |
+| `graduation_after_cutoff` | alerte | Diplôme obtenu en 2028 ou après |
+| `graduation_review` | à vérifier | Diplôme obtenu en 2027 : mois à examiner |
 | `citizenship_outside_region` | alerte, ou à vérifier si double nationalité | Nationalité hors zone |
 | `citizenship_unknown` | à vérifier | Nationalité absente ou illisible |
 | `eligibility_answer_no` | alerte | Réponse « No » à une question d'éligibilité |
@@ -90,8 +95,9 @@ réponses du dossier qui le montrent, citées telles quelles.
 | `eligibility_answers_missing` | à vérifier | Aucune réponse d'éligibilité dans le dossier |
 
 Les paramètres sont dans `src/eit_screening/screening/eligibility.toml` (valeurs
-du formulaire 2026). Pour essayer les valeurs du mémoire, copier ce fichier, le
-modifier et le passer avec `--config`. L'option `--scenarios` compare les
+du guide 2027, hypothèses marquées). Pour essayer d'autres règles (celles du
+formulaire 2026 par exemple), copier ce fichier, le modifier et le passer avec
+`--config`. L'option `--scenarios` compare les
 constats aux anomalies placées dans les dossiers fictifs.
 
 ## Rattacher l'export du test
@@ -152,7 +158,7 @@ Les paramètres sont dans `src/eit_screening/media/media.toml`.
 ## Anonymiser les dossiers
 
 ```bash
-eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+eit-anonymize data/fictifs/dossiers -o data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json
 ```
 
 Pour chaque dossier, le module rassemble les textes utiles à l'évaluation
@@ -224,10 +230,10 @@ la structure du dossier (`search/questions.toml`). Sur la cohorte de référence
 la recherche dense seule fait le mieux ; le re-ranking dégrade le résultat
 (voir `docs/feuille-de-route.md`, étape 6).
 
-## Proposer un verdict
+## Proposer une décision
 
 ```bash
-eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json
 ```
 
 Pour chaque dossier anonymisé, le module cherche les passages de chaque critère
@@ -237,10 +243,14 @@ réponses libres sont génériques. La sortie est contrainte par un schéma JSON
 et vérifiée ; une réponse non conforme est redemandée.
 
 Le code vérifie ensuite chaque citation : si elle n'est pas mot pour mot dans le
-dossier, elle est marquée « introuvable » et ne compte pas comme preuve. Le
-verdict proposé vient d'une règle explicite (`verdict/verdict.toml`) qui combine
-les notes, les constats d'éligibilité et de test (étapes 1 et 2) et les
-citations. Chaque appel est journalisé (`<pseudonyme>.appel.json` : messages
+dossier, elle est marquée « introuvable » et ne compte pas comme preuve. La
+décision proposée vient d'une règle explicite (`verdict/verdict.toml`) qui
+combine les notes, les constats d'éligibilité et de test (étapes 1 et 2) et les
+citations. Guide 2027 : trois décisions (`Interview Invitation`,
+`Interview Reject`, `Waitlist`) et un booléen distinct, `request_further_review`.
+Un constat qui écarte selon le guide fait proposer `Interview Reject` ; un
+constat signalé, un Concern ou une citation introuvable demande la revue
+complémentaire. Chaque appel est journalisé (`<pseudonyme>.appel.json` : messages
 envoyés, passages, réponses brutes).
 
 Le client parle le protocole compatible OpenAI. Par défaut, il vise Ollama sur
@@ -263,9 +273,9 @@ cd ui && pnpm install && pnpm dev --port 3100   # http://localhost:3100
 ```
 
 L'API (FastAPI, PostgreSQL) sert la liste des candidatures, le détail d'un
-dossier, et enregistre la décision de l'évaluateur : valider le verdict proposé,
+dossier, et enregistre la décision de l'évaluateur : valider la décision proposée,
 ou le modifier avec un commentaire obligatoire. Chaque décision garde
-l'évaluateur, la date, le verdict proposé et le verdict retenu ; le journal
+l'évaluateur, la date, la décision et la demande de revue proposées et retenues ; le journal
 n'est jamais réécrit. Pas d'authentification dans le prototype : l'évaluateur
 saisit son nom.
 
@@ -280,7 +290,7 @@ L'interface (Next.js, TypeScript, Tailwind CSS, shadcn/ui) a deux écrans :
 ## Évaluer
 
 ```bash
-eit-evaluate --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+eit-evaluate --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json
 ```
 
 Rassemble les mesures de toutes les étapes dans `data/resultats/evaluation.json`
@@ -316,11 +326,14 @@ portent en plus une anomalie :
 |---|---|
 | `assessment_name_swapped` | Nom et prénom inversés dans l'export du test, avec une autre adresse e-mail |
 | `assessment_not_found` | Aucun résultat de test |
-| `assessment_late` | Test passé après la date limite |
+| `assessment_late` | Test rendu après la date limite (21 ou 22 juillet 2026) |
 | `assessment_too_fast` | Test terminé en un temps anormalement court avec un score élevé |
 | `generic_ai_answers` | Réponses libres génériques, sans aucun fait personnel |
 | `age_out_of_range` | Date de naissance hors tranche, malgré la réponse « Yes » |
-| `citizenship_outside_region` | Nationalité hors Afrique de l'Ouest, malgré la réponse « Yes » |
+| `age_borderline` | 20 ans au dépôt et 21 ans au 1er janvier 2027, ou 35 ans au 1er janvier 2027 |
+| `citizenship_outside_region` | Nationalité hors Afrique de l'Ouest et de l'Est, malgré la réponse « Yes » |
+| `graduation_after_cutoff` | Diplôme obtenu en 2028 |
+| `graduation_review` | Diplôme obtenu en 2027 |
 | `missing_resume` | CV non fourni |
 | `poor_audio` | Vidéo de présentation presque inaudible |
 
@@ -340,14 +353,14 @@ Les tests de l'étape 4 chargent de vrais modèles : Docling sur un dossier, et
 Whisper « small » (environ 460 Mo, téléchargé au premier lancement) sur une
 courte vidéo dont la voix est synthétisée par FFmpeg. Ils demandent un FFmpeg
 compilé avec le filtre `flite` (c'est le cas du paquet Ubuntu). Les tests de
-l'étape 5 chargent bge-m3. Durée totale : environ 2 minutes, 3,1 Go de mémoire
-au plus.
+l'étape 5 chargent bge-m3, ceux de l'étape 6 le re-ranking. Durée totale :
+environ 3 minutes, 4,4 Go de mémoire au plus. Ne rien lancer de lourd à côté.
 
 Contrôle de fuite sur toute la cohorte anonymisée (code indépendant du module
 d'anonymisation) :
 
 ```bash
-eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs.json
+eit-leak-check data/fictifs/dossiers data/anonymises --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json
 ```
 
 L'import a aussi été vérifié sur un dossier réel de la cohorte 2026 : 73
@@ -356,9 +369,12 @@ questions lues, aucun avertissement. Ce dossier n'est pas dans le dépôt.
 ## Hypothèses à confirmer avec MEST
 
 - **Export du test.** Les colonnes de `assessment_results.csv` sont une
-  supposition ; le format réel de la plateforme de test reste à obtenir.
-- **Date limite du test.** Fixée au 10 août 2025 dans `profiles.py` et dans
-  `assessment.toml`.
+  supposition ; le format réel de l'export ClassMarker reste à obtenir.
+- **Date limite du test.** Guide 2027 : 20 juillet à 23 h 59 GMT ; l'année
+  (2026) et le fuseau des dates de l'export (GMT) sont des hypothèses
+  (`assessment.toml`).
+- **Règles du guide 2027 non précisées** (dates du programme, liste des pays
+  d'Afrique de l'Est, domaines de la grille) : voir `docs/cadrage.md`.
 - **Fichier manquant.** L'export réel d'une question de fichier sans réponse
   n'a pas été observé ; le générateur écrit « (No response) ».
 - **Questions conditionnelles.** Les champs de parrainage et « If Other » ne

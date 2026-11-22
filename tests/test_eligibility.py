@@ -1,6 +1,6 @@
 """Contrôles d'éligibilité : constats attendus sur les dossiers fictifs, et cas limites."""
 
-from datetime import date
+from datetime import date, datetime
 from functools import cache
 
 import pytest
@@ -32,6 +32,21 @@ def _application(**personal):
     return app
 
 
+def _graduating(*dates):
+    """Dossier régulier dont les formations sont obtenues aux dates données."""
+    app = _application()
+    template = app.education[0]
+    app.education = [template.model_copy(update={"graduation_date": d}) for d in dates]
+    return app
+
+
+def _config(**age):
+    config = CONFIG.model_copy(deep=True)
+    for name, value in age.items():
+        setattr(config.age, name, value)
+    return config
+
+
 def _set_answer(app, key, value):
     for answer in app.eligibility:
         if answer.key == key:
@@ -57,12 +72,14 @@ def test_reference_cohort_from_pdf(cohort, parsed):
         if any(c in SCENARIO_CODES for c in d.scenario.anomalies)
     }
     assert flagged == expected
-    assert len(flagged) == 3
+    # Composition de la cohorte (feuille de route) : 2 âges hors tranche, 1 âge limite,
+    # 1 nationalité hors zone, 1 diplôme en 2028, 1 diplôme en 2027.
+    assert len(flagged) == 6
 
     comparison = compare_with_scenarios(reports, out_dir / "scenarios.csv")
-    assert (comparison.expected, comparison.found) == (3, 3)
+    assert (comparison.expected, comparison.found) == (6, 6)
     assert comparison.missed == [] and comparison.false_alerts == []
-    assert comparison.dossiers_without_finding == comparison.clean_dossiers == 37
+    assert comparison.dossiers_without_finding == comparison.clean_dossiers == 34
 
 
 def test_findings_quote_the_pdf(cohort, parsed):
@@ -92,7 +109,7 @@ def test_cli_with_scenarios(cohort, tmp_path, capsys):
     out = tmp_path / "constats.json"
     assert main([str(out_dir / "dossiers"), "--scenarios", str(out_dir / "scenarios.csv"), "-o", str(out)]) == 0
     printed = capsys.readouterr().out
-    assert "attendues : 3, retrouvées : 3, manquées : 0, constats en trop : 0" in printed
+    assert "attendues : 6, retrouvées : 6, manquées : 0, constats en trop : 0" in printed
     assert out.exists()
 
 
@@ -111,15 +128,51 @@ def test_age_on():
 @pytest.mark.parametrize(
     ("birth", "flagged"),
     [
-        (date(2005, 1, 1), False),  # 21 ans pile
-        (date(2005, 1, 2), True),  # 21 ans le lendemain de la date de référence
-        (date(1995, 1, 2), False),  # 30 ans, 31 le lendemain
-        (date(1995, 1, 1), True),  # 31 ans pile
+        (date(2006, 1, 1), False),  # 21 ans pile au 1er janvier 2027
+        (date(2006, 1, 2), True),  # 20 ans au 1er janvier 2027
+        (date(1991, 1, 2), False),  # 35 ans, 36 le lendemain
+        (date(1991, 1, 1), True),  # 36 ans pile
     ],
 )
 def test_age_bounds(birth, flagged):
     report = check_eligibility(_application(date_of_birth=birth), CONFIG)
     assert ("age_out_of_range" in _codes(report)) is flagged
+
+
+def _submitted(app, day):
+    app.last_submitted = datetime(day.year, day.month, day.day, 12, 0)
+    return app
+
+
+def test_twenty_at_submission_but_twenty_one_at_reference_is_flagged_not_excluded():
+    app = _submitted(_application(date_of_birth=date(2005, 10, 1)), date(2026, 7, 10))
+    (finding,) = check_eligibility(app, CONFIG).findings
+    assert (finding.code, finding.severity) == ("age_borderline", "to_check")
+    assert "20 ans au dépôt" in finding.message
+
+
+def test_twenty_one_at_submission_is_not_flagged():
+    app = _submitted(_application(date_of_birth=date(2005, 3, 1)), date(2026, 7, 10))
+    assert check_eligibility(app, CONFIG).findings == []
+
+
+def test_thirty_five_is_flagged_while_programme_end_is_unknown():
+    (finding,) = check_eligibility(_application(date_of_birth=date(1991, 6, 1)), CONFIG).findings
+    assert (finding.code, finding.severity) == ("age_borderline", "to_check")
+
+
+def test_thirty_five_against_a_known_programme_end():
+    config = _config(program_end=date(2027, 3, 31))
+    assert check_eligibility(_application(date_of_birth=date(1991, 6, 1)), config).findings == []
+    (finding,) = check_eligibility(_application(date_of_birth=date(1991, 2, 1)), config).findings
+    assert finding.code == "age_borderline" and "36 ans à la fin" in finding.message
+
+
+def test_twenty_at_reference_but_twenty_one_at_a_known_start():
+    app = _application(date_of_birth=date(2006, 2, 1))
+    assert _codes(check_eligibility(app, CONFIG)) == ["age_out_of_range"]
+    (finding,) = check_eligibility(app, _config(program_start=date(2027, 3, 1))).findings
+    assert (finding.code, finding.severity) == ("age_borderline", "to_check")
 
 
 def test_missing_birth_date_is_to_check():
@@ -173,8 +226,19 @@ def test_similar_names_stay_distinct():
     assert CONFIG.citizenship.in_zone("Papua New Guinea") is None
 
 
+@pytest.mark.parametrize("country", ["Kenya", "Rwanda", "Uganda", "Tanzania", "Ethiopia", "Ghana", "Togo"])
+def test_west_and_east_africa_are_in_zone(country):
+    assert check_eligibility(_application(country_of_citizenship=country), CONFIG).findings == []
+
+
+@pytest.mark.parametrize("country", ["Cameroon", "Democratic Republic of the Congo", "South Africa", "Egypt"])
+def test_outside_west_and_east_africa(country):
+    (finding,) = check_eligibility(_application(country_of_citizenship=country), CONFIG).findings
+    assert (finding.code, finding.severity) == ("citizenship_outside_region", "alert")
+
+
 def test_dual_citizenship_lowers_severity():
-    app = _application(country_of_citizenship="Kenya", dual_citizenship=True)
+    app = _application(country_of_citizenship="Cameroon", dual_citizenship=True)
     (finding,) = check_eligibility(app, CONFIG).findings
     assert (finding.code, finding.severity) == ("citizenship_outside_region", "to_check")
 
@@ -186,8 +250,32 @@ def test_missing_citizenship_is_to_check():
 
 def test_residence_is_not_citizenship():
     # Résider hors zone ne compte pas : seule la nationalité est contrôlée.
-    app = _application(country_of_residence="Kenya", based_in="Other")
+    app = _application(country_of_residence="Cameroon", based_in="Other")
     assert check_eligibility(app, CONFIG).findings == []
+
+
+# --- Diplôme --------------------------------------------------------------------
+
+
+def test_graduation_in_2028_is_excluded():
+    (finding,) = check_eligibility(_graduating(date(2028, 6, 30)), CONFIG).findings
+    assert (finding.code, finding.severity) == ("graduation_after_cutoff", "alert")
+
+
+def test_graduation_in_2027_is_flagged_with_its_month():
+    (finding,) = check_eligibility(_graduating(date(2027, 9, 15)), CONFIG).findings
+    assert (finding.code, finding.severity) == ("graduation_review", "to_check")
+    assert "09/2027" in finding.message
+
+
+def test_graduation_before_2027_is_fine():
+    assert check_eligibility(_graduating(date(2026, 12, 31)), CONFIG).findings == []
+
+
+def test_latest_degree_counts():
+    (finding,) = check_eligibility(_graduating(date(2022, 6, 1), date(2028, 1, 15)), CONFIG).findings
+    assert finding.code == "graduation_after_cutoff" and "plus tardive" in finding.message
+    assert finding.evidence[0].field == "education[1].graduation_date"
 
 
 # --- Réponses d'éligibilité ---------------------------------------------------
@@ -206,7 +294,7 @@ def test_no_to_age_question_despite_age_in_range():
     app = _set_answer(_application(date_of_birth=date(2000, 6, 1)), "age_in_range", False)
     (finding,) = check_eligibility(app, CONFIG).findings
     assert finding.code == "eligibility_answer_no"
-    assert "25 ans" in finding.message
+    assert "26 ans" in finding.message
 
 
 def test_unreadable_answer_is_to_check():
@@ -228,30 +316,31 @@ def test_report_has_no_decision_field():
 
 # --- Paramètres ---------------------------------------------------------------
 
-MEMOIRE_CONFIG = """
+# Règles du formulaire 2026, avant le guide 2027 : 21-30 ans, Afrique de l'Ouest seulement.
+FORM_2026_CONFIG = """
 [age]
 min = 21
-max = 35
+max = 30
 reference_date = 2026-01-01
 
 [citizenship]
-zone_name = "Afrique de l'Est ou de l'Ouest"
-countries = ["Ghana", "Nigeria", "Togo", "Kenya", "Rwanda", "Ethiopia"]
+zone_name = "Afrique de l'Ouest"
+countries = ["Ghana", "Nigeria", "Togo"]
 """
 
 
 def test_alternate_config_changes_results(tmp_path):
-    path = tmp_path / "memoire.toml"
-    path.write_text(MEMOIRE_CONFIG, encoding="utf-8")
+    path = tmp_path / "formulaire-2026.toml"
+    path.write_text(FORM_2026_CONFIG, encoding="utf-8")
     config = load_config(path)
     app = _application(country_of_citizenship="Kenya", date_of_birth=date(1993, 3, 1))
-    assert _codes(check_eligibility(app, CONFIG)) == ["age_out_of_range", "citizenship_outside_region"]
-    assert check_eligibility(app, config).findings == []
+    assert check_eligibility(app, CONFIG).findings == []
+    assert _codes(check_eligibility(app, config)) == ["age_out_of_range", "citizenship_outside_region"]
 
 
 def test_invalid_age_range(tmp_path):
     path = tmp_path / "invalide.toml"
-    path.write_text(MEMOIRE_CONFIG.replace("max = 35", "max = 18"), encoding="utf-8")
+    path.write_text(FORM_2026_CONFIG.replace("max = 30", "max = 18"), encoding="utf-8")
     with pytest.raises(ValueError):
         load_config(path)
 

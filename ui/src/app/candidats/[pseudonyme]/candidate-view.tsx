@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { StatusBadge, VerdictBadge } from "@/components/verdict-badge";
+import { ReviewBadge, StatusBadge, VerdictBadge } from "@/components/verdict-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,6 +93,7 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
   const [evaluator, setEvaluator] = useState("");
   const [modifying, setModifying] = useState(false);
   const [retained, setRetained] = useState<VerdictLabel | "">("");
+  const [review, setReview] = useState(false);
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -147,12 +148,14 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
       await postDecision(data.pseudonym, {
         evaluator,
         action,
-        ...(action === "modify" ? { retained: retained || undefined, comment } : { comment }),
+        ...(action === "modify"
+          ? { retained: retained || undefined, request_further_review: review, comment }
+          : { comment }),
       });
       setModifying(false);
       setComment("");
       setRetained("");
-      setMessage(action === "validate" ? "Verdict validé." : "Verdict modifié.");
+      setMessage(action === "validate" ? "Proposition validée." : "Décision modifiée.");
       await reload();
     } catch (e) {
       setMessage(`Décision refusée : ${(e as Error).message}`);
@@ -191,7 +194,8 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
           <Card>
             <CardHeader>
               <CardTitle className="flex flex-wrap items-center gap-2">
-                Verdict proposé <VerdictBadge verdict={v.proposed} />
+                Décision proposée <VerdictBadge verdict={v.proposed} />
+                <ReviewBadge review={v.request_further_review} />
                 <span className="ml-auto tabular-nums">
                   {v.total ?? "–"} / {v.max_total}
                 </span>
@@ -199,6 +203,9 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm">{v.rule}</p>
+              {v.request_further_review && v.review_reasons.length > 0 && (
+                <p className="text-sm">Revue complémentaire demandée : {v.review_reasons.join(" ; ")}.</p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Citations vérifiées mot pour mot : {v.quotes_verified} / {v.quotes_total} · modèle {v.llm.model},{" "}
                 {v.llm.attempts} essai(s), {Math.round(v.llm.seconds)} s
@@ -249,17 +256,27 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
               </div>
               {!modifying ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button disabled={!evaluator.trim() || saving} onClick={() => submit("validate")}>
-                    Valider « {v.proposed} »
-                  </Button>
-                  <Button variant="outline" disabled={saving} onClick={() => setModifying(true)}>
-                    Modifier
+                  {v.proposed && (
+                    <Button disabled={!evaluator.trim() || saving} onClick={() => submit("validate")}>
+                      Valider « {v.proposed} »{v.request_further_review ? " avec revue" : ""}
+                    </Button>
+                  )}
+                  <Button
+                    variant={v.proposed ? "outline" : "default"}
+                    disabled={saving}
+                    onClick={() => {
+                      setRetained(v.proposed ?? "");
+                      setReview(v.request_further_review);
+                      setModifying(true);
+                    }}
+                  >
+                    {v.proposed ? "Modifier" : "Choisir une décision"}
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <div className="space-y-1">
-                    <Label htmlFor="verdict-retenu">Verdict retenu</Label>
+                    <Label htmlFor="verdict-retenu">Décision retenue</Label>
                     <select
                       id="verdict-retenu"
                       className="h-8 w-full rounded-lg border border-input bg-background px-2 text-sm"
@@ -267,18 +284,28 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
                       onChange={(e) => setRetained(e.target.value as VerdictLabel)}
                     >
                       <option value="">Choisir…</option>
-                      {VERDICTS.filter((x) => x !== v.proposed).map((x) => (
+                      {VERDICTS.map((x) => (
                         <option key={x}>{x}</option>
                       ))}
                     </select>
                   </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={review} onChange={(e) => setReview(e.target.checked)} />
+                    Demander une revue complémentaire
+                  </label>
                   <div className="space-y-1">
                     <Label htmlFor="commentaire">Pourquoi ? (obligatoire)</Label>
                     <Textarea id="commentaire" value={comment} onChange={(e) => setComment(e.target.value)} />
                   </div>
                   <div className="flex gap-2">
                     <Button
-                      disabled={!evaluator.trim() || !retained || !comment.trim() || saving}
+                      disabled={
+                        !evaluator.trim() ||
+                        !retained ||
+                        !comment.trim() ||
+                        saving ||
+                        (retained === v.proposed && review === v.request_further_review)
+                      }
                       onClick={() => submit("modify")}
                     >
                       Enregistrer la modification
@@ -295,7 +322,9 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
                   {data.decisions.map((d) => (
                     <li key={d.id}>
                       {new Date(d.created_at).toLocaleString("fr-FR")} · {d.evaluator} ·{" "}
-                      {d.action === "validate" ? "a validé" : "a modifié"} : {d.proposed} → {d.retained}
+                      {d.action === "validate" ? "a validé" : "a modifié"} : {d.proposed ?? "aucune"}
+                      {d.proposed_review ? " (revue)" : ""} → {d.retained}
+                      {d.retained_review ? " (revue)" : ""}
                       {d.comment ? ` (« ${d.comment} »)` : ""}
                     </li>
                   ))}

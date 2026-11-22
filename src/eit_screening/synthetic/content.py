@@ -36,8 +36,9 @@ COUNTRIES: dict[str, tuple[str, str, str, list[str]]] = {
 # Pondération : les trois pays d'entretien sont les plus représentés.
 COUNTRY_WEIGHTS = {"Ghana": 9, "Nigeria": 9, "Senegal": 4, "Côte d'Ivoire": 3, "Togo": 3, "Benin": 2}
 
-# Pays hors Afrique de l'Ouest, pour le scénario « nationalité hors zone ».
-OUTSIDE_REGION = {"Kenya": "+254", "Cameroon": "+237", "Rwanda": "+250", "Ethiopia": "+251"}
+# Pays hors Afrique de l'Ouest et de l'Est (au sens de l'ONU comme de l'EAC),
+# pour le scénario « nationalité hors zone ».
+OUTSIDE_REGION = {"Cameroon": "+237", "South Africa": "+27", "Egypt": "+20", "Morocco": "+212"}
 
 # Options du formulaire pour « country you are based in » et ville d'entretien associée.
 BASED_IN_OPTIONS = {"Ghana": "Accra", "Nigeria": "Lagos", "Senegal": "Dakar"}
@@ -83,9 +84,9 @@ NAME_GROUPS = {
         "last": ["Conteh", "Kamara", "Sesay", "Koroma", "Bangura", "Johnson"],
     },
     "hors_zone": {
-        "Male": ["Brian", "Kevin", "Eric", "Samuel"],
-        "Female": ["Mercy", "Grace", "Diane", "Sarah"],
-        "last": ["Otieno", "Mwangi", "Mbarga", "Habimana", "Tesfaye"],
+        "Male": ["Thabo", "Junior", "Eric", "Samuel"],
+        "Female": ["Lerato", "Grace", "Diane", "Sarah"],
+        "last": ["Mbarga", "Nkosi", "Ndlovu", "Fouda", "Ebongue"],
     },
 }
 COUNTRY_NAME_GROUP = {

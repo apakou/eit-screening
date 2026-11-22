@@ -1,8 +1,10 @@
 # Grille d'évaluation de la présélection.
 #
-# ATTENTION : cette grille vient du mémoire, pas d'un document de MEST. Le guide
-# d'évaluation de MEST (repères de notation, liste complète des Concerns) reste
-# à obtenir ; voir docs/cadrage.md. Modifier ce fichier, pas le code.
+# ATTENTION : ces quatre critères notés sur 10 viennent du mémoire, PAS du guide
+# d'évaluation 2027 de MEST. Le guide note sur 40 points des domaines qu'il
+# nomme lui-même, sans que leurs noms ni leur pondération aient encore été
+# reportés ici. À remplacer par les domaines du guide, sans inventer de
+# pondération (voir docs/cadrage.md). Modifier ce fichier, pas le code.
 #
 # « query » est la requête de recherche envoyée au dossier du candidat pour ce
 # critère (en anglais, comme les dossiers).

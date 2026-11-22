@@ -5,11 +5,16 @@ const VERDICT_STYLE: Record<VerdictLabel, string> = {
   "Interview Invitation": "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
   Waitlist: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
   "Interview Reject": "bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-200",
-  "Request Final Review": "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200",
 };
 
-export function VerdictBadge({ verdict }: { verdict: VerdictLabel }) {
+export function VerdictBadge({ verdict }: { verdict: VerdictLabel | null }) {
+  if (verdict === null) return <Badge variant="outline">Aucune décision proposée</Badge>;
   return <Badge className={VERDICT_STYLE[verdict]}>{verdict}</Badge>;
+}
+
+export function ReviewBadge({ review }: { review: boolean | null }) {
+  if (!review) return null;
+  return <Badge className="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-200">Revue complémentaire</Badge>;
 }
 
 export function StatusBadge({ status }: { status: Status }) {

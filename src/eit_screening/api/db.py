@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -29,7 +29,9 @@ class Candidate(Base):
     __tablename__ = "candidates"
 
     pseudonym: Mapped[str] = mapped_column(String(32), primary_key=True)
-    proposed: Mapped[str] = mapped_column(String(32))
+    # Décision proposée (trois valeurs, ou vide si rien n'est proposable) et revue complémentaire.
+    proposed: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    request_further_review: Mapped[bool] = mapped_column(Boolean, default=False)
     total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     max_total: Mapped[int] = mapped_column(Integer)
     alerts: Mapped[int] = mapped_column(Integer, default=0)
@@ -50,8 +52,10 @@ class Decision(Base):
     pseudonym: Mapped[str] = mapped_column(ForeignKey("candidates.pseudonym"), index=True)
     evaluator: Mapped[str] = mapped_column(String(120))
     action: Mapped[str] = mapped_column(String(16))  # validate | modify
-    proposed: Mapped[str] = mapped_column(String(32))
+    proposed: Mapped[str | None] = mapped_column(String(32), nullable=True)
     retained: Mapped[str] = mapped_column(String(32))
+    proposed_review: Mapped[bool] = mapped_column(Boolean)
+    retained_review: Mapped[bool] = mapped_column(Boolean)
     comment: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

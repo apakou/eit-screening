@@ -1,27 +1,42 @@
 # Paramètres des contrôles d'éligibilité.
 #
-# Valeurs du formulaire « MEST AI Startup Program (Class of 2026) ».
-# Le mémoire en donne d'autres (21 à 35 ans, Afrique de l'Est ou de l'Ouest) :
-# tant que MEST n'a pas tranché, on suit le formulaire (voir docs/cadrage.md).
-# Pour essayer une autre règle, copier ce fichier, le modifier et le passer
-# avec l'option --config.
+# Valeurs du guide d'évaluation de MEST pour la promotion 2027 (reçu le
+# 22 novembre 2026). Les valeurs que le guide ne donne pas sont marquées
+# HYPOTHÈSE. Pour essayer une autre règle, copier ce fichier, le modifier et le
+# passer avec l'option --config.
 
 [age]
+# Guide 2027 : 21 à 35 ans au 1er janvier 2027.
 min = 21
-max = 30
-# Date à laquelle l'âge est calculé. Hypothèse : début du programme
-# (janvier 2026). Le formulaire ne la précise pas ; à confirmer avec MEST.
-reference_date = 2026-01-01
+max = 35
+reference_date = 2027-01-01
+# Cas signalés sans être écartés (constat « à vérifier », code age_borderline) :
+# - 20 ans au dépôt du dossier, 21 ans à la date de référence ;
+# - 20 ans à la date de référence mais 21 ans au démarrage du programme, si
+#   program_start est donné ;
+# - 35 ans à la date de référence, qui pourrait atteindre 36 ans pendant le
+#   programme : comparé à program_end s'il est donné, sinon tous sont signalés.
+# Le guide ne donne ni le démarrage ni la fin du programme : laissés vides.
+# program_start = 2027-01-01
+# program_end = 2027-12-31
 
 [citizenship]
-zone_name = "Afrique de l'Ouest"
-# Définition retenue : les 16 pays de l'Afrique de l'Ouest selon la
-# classification géographique de l'ONU (M49). Elle inclut le Mali, le Burkina
-# Faso et le Niger, sortis de la CEDEAO en 2025, ainsi que la Mauritanie.
+zone_name = "Afrique de l'Ouest ou de l'Est"
+# Guide 2027 : citoyenneté d'un pays d'Afrique de l'Ouest OU de l'Est.
+# HYPOTHÈSE sur la liste : classification géographique de l'ONU (M49), comme
+# pour l'Afrique de l'Ouest. Elle diffère de la Communauté d'Afrique de l'Est
+# (EAC) : la RDC est dans l'EAC mais en Afrique centrale pour l'ONU ; Zambie,
+# Zimbabwe, Malawi, Mozambique, Madagascar, Maurice, Seychelles, Comores,
+# Djibouti, Érythrée et Éthiopie sont à l'Est pour l'ONU mais hors de l'EAC.
 countries = [
+    # Afrique de l'Ouest (ONU, 16 pays)
     "Benin", "Burkina Faso", "Cabo Verde", "Côte d'Ivoire", "Gambia", "Ghana",
     "Guinea", "Guinea-Bissau", "Liberia", "Mali", "Mauritania", "Niger",
     "Nigeria", "Senegal", "Sierra Leone", "Togo",
+    # Afrique de l'Est (ONU, 18 pays)
+    "Burundi", "Comoros", "Djibouti", "Eritrea", "Ethiopia", "Kenya",
+    "Madagascar", "Malawi", "Mauritius", "Mozambique", "Rwanda", "Seychelles",
+    "Somalia", "South Sudan", "Tanzania", "Uganda", "Zambia", "Zimbabwe",
 ]
 
 # Autres graphies possibles d'un même pays (comparaison sans casse, sans
@@ -35,6 +50,16 @@ countries = [
 "Guinée-Bissau" = "Guinea-Bissau"
 "Mauritanie" = "Mauritania"
 "Libéria" = "Liberia"
+"United Republic of Tanzania" = "Tanzania"
+"Éthiopie" = "Ethiopia"
+"Ouganda" = "Uganda"
+
+[education]
+# Guide 2027 : diplôme obtenu en 2028 ou après = écarté (constat « alerte ») ;
+# en 2027 = signalé pour examen du mois d'obtention (constat « à vérifier »).
+# Avec plusieurs diplômes, c'est la date d'obtention la plus tardive qui compte.
+excluded_from_year = 2028
+review_year = 2027
 
 [questions]
 # Clés des questions d'éligibilité reliées à une donnée du dossier :
