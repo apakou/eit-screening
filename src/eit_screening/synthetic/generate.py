@@ -25,7 +25,8 @@ from .profiles import ANOMALIES, Dossier, build_cohort
 from .render_pdf import render_dossier
 
 ASSESSMENT_COLUMNS = [
-    "first_name", "last_name", "email", "score_percent", "time_taken_minutes", "completed_at",
+    "first_name", "last_name", "email",
+    "score_points", "score_max", "score_percent", "duration", "completed_at",
 ]
 SCENARIO_COLUMNS = [
     "application_id", "niveau", "anomalie", "description", "eligible_attendu",
@@ -67,7 +68,7 @@ def write_cohort(dossiers: list[Dossier], out_dir: str | Path) -> Path:
         )
 
     with (out_dir / "assessment_results.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=ASSESSMENT_COLUMNS)
+        writer = csv.DictWriter(handle, fieldnames=ASSESSMENT_COLUMNS, extrasaction="ignore")
         writer.writeheader()
         # Triées par nom : l'ordre de l'export ne trahit pas celui des dossiers.
         rows = [dossier.assessment for dossier in dossiers if dossier.assessment]

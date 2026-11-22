@@ -7,6 +7,7 @@ import pytest
 from eit_screening.models import Application, Personal
 from eit_screening.screening.assessment_match import (
     AssessmentRow,
+    _duration_minutes,
     compare_with_scenarios,
     load_config,
     main,
@@ -26,8 +27,8 @@ def _app(application_id, first, last, email):
 
 def _row(line, first, last, email, score=60, minutes=50, completed="2026-07-10T10:00"):
     raw = {
-        "first_name": first, "last_name": last, "email": email,
-        "score_percent": str(score), "time_taken_minutes": str(minutes), "completed_at": completed or "",
+        "first_name": first, "last_name": last, "email": email, "score_percent": str(score),
+        "duration": f"{int(minutes) // 60:02d}:{int(minutes) % 60:02d}:00", "completed_at": completed or "",
     }
     return AssessmentRow(
         line=line, first_name=first, last_name=last, email=email, score_percent=score,
@@ -38,8 +39,8 @@ def _row(line, first, last, email, score=60, minutes=50, completed="2026-07-10T1
 def _rows_from(dossiers):
     rows = [d.assessment for d in dossiers if d.assessment]
     return [
-        _row(i + 2, r["first_name"], r["last_name"], r["email"], r["score_percent"],
-             r["time_taken_minutes"], r["completed_at"])
+        _row(i + 2, r["first_name"], r["last_name"], r["email"],
+             float(r["score_percent"].rstrip("%")), r["time_taken_minutes"], r["completed_at_iso"])
         for i, r in enumerate(rows)
     ]
 
@@ -275,7 +276,7 @@ def test_duration_threshold(minutes, flagged):
     if flagged:
         (finding,) = match.findings
         assert finding.severity == "to_check"
-        assert {e.question for e in finding.evidence} == {"time_taken_minutes", "score_percent"}
+        assert {e.question for e in finding.evidence} == {"duration", "score_percent"}
         assert all(e.source == "assessment_results.csv, ligne 2" for e in finding.evidence)
 
 
@@ -316,7 +317,7 @@ first_name = "First Name"
 last_name = "Last Name"
 email = "Email"
 score_percent = "Score"
-time_taken_minutes = "Minutes"
+duration = "Minutes"
 completed_at = "Completed"
 
 [deadline]
@@ -354,3 +355,55 @@ def test_missing_column(tmp_path):
     export.write_text("first_name,last_name,email\nAma,Osei,a@example.org\n", encoding="utf-8")
     with pytest.raises(ValueError, match="score_percent"):
         read_export(export, CONFIG)
+
+
+# --- Formats relevés sur une fiche de résultat ClassMarker 2027 ---------------
+
+
+def test_reads_classmarker_value_formats(tmp_path):
+    """Points sur 50, durée « hh:mm:ss », date « Tue 21 Jul '26 5:52pm »."""
+    export = tmp_path / "export.csv"
+    export.write_text(
+        "first_name,last_name,email,score_points,score_max,score_percent,duration,completed_at\n"
+        "Ama,Osei,a@example.org,46,50,,00:38:06,Tue 21 Jul '26 5:52pm\n",
+        encoding="utf-8",
+    )
+    (row,) = read_export(export, CONFIG)
+    assert (row.score_points, row.score_max) == (46.0, 50.0)
+    # Le pourcentage est déduit des points quand la colonne est vide.
+    assert row.score_percent == 92.0
+    assert row.time_taken_minutes == pytest.approx(38.1, abs=0.01)
+    assert row.completed_at == datetime(2026, 7, 21, 17, 52)
+
+
+def test_classmarker_row_is_late_but_not_too_fast():
+    """La fiche observée a été rendue le 21 juillet : après la date limite du guide."""
+    row = AssessmentRow(
+        line=2, first_name="Ama", last_name="Osei", email="a@example.org",
+        score_percent=92.0, score_points=46.0, score_max=50.0, time_taken_minutes=38.1,
+        completed_at=datetime(2026, 7, 21, 17, 52),
+        raw={"first_name": "Ama", "last_name": "Osei", "email": "a@example.org",
+             "score_percent": "", "duration": "00:38:06", "completed_at": "Tue 21 Jul '26 5:52pm"},
+    )
+    match = match_assessments([_app("1", "Ama", "Osei", "a@example.org")], [row], CONFIG).matches[0]
+    assert _codes(match) == ["assessment_late"]
+
+
+@pytest.mark.parametrize(
+    "text, minutes",
+    [
+        ("00:38:06", 38.1),       # format de la fiche ClassMarker
+        ("01:10:00", 70.0),       # plus d'une heure
+        ("38:06", 38.1),          # sans la part des heures
+        ("38", 38.0),             # nombre de minutes, ancien format du générateur
+        ("38,5", 38.5),           # virgule décimale
+        ("", None),
+        ("plus tard", None),
+    ],
+)
+def test_duration_formats(text, minutes):
+    result = _duration_minutes(text)
+    if minutes is None:
+        assert result is None
+    else:
+        assert result == pytest.approx(minutes, abs=0.01)

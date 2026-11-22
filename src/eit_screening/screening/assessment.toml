@@ -1,26 +1,52 @@
 # Paramètres de l'appariement avec l'export de la plateforme de test.
 #
-# Guide 2027 : le test se passe sur ClassMarker. Le format réel de l'export
-# ClassMarker n'est pas connu : les noms de colonnes ci-dessous décrivent le
-# fichier fabriqué par eit-generate (assessment_results.csv). Quand MEST
-# fournira un vrai export, adapter cette section, pas le code.
+# Guide 2027 : le test se passe sur ClassMarker. Une fiche de résultat
+# individuelle de la promotion 2027 (« AI Startup Program Class of 2027 ») a été
+# observée le 22 novembre 2026. Elle fixe les FORMATS des valeurs :
+#
+#     Points: 46 / 50     Duration: 00:38:06
+#     Date started: Tue 21 Jul '26 5:14pm    Date finished: Tue 21 Jul '26 5:52pm
+#
+# Les NOMS DE COLONNES de l'export groupé (ClassMarker, Results → Download)
+# restent inconnus : ceux ci-dessous décrivent le fichier fabriqué par
+# eit-generate. Quand MEST fournira un export groupé réel, adapter cette
+# section, pas le code.
 
 [export]
 delimiter = ","
 encoding = "utf-8"
-# Format de la date de fin du test (codes strftime). Vide : ISO 8601.
-datetime_format = ""
+# Format des dates. « classmarker » : « Tue 21 Jul '26 5:52pm ». Vide : ISO 8601.
+# Toute autre valeur est lue comme des codes strftime.
+datetime_format = "classmarker"
 # Fuseau horaire des dates de l'export quand elles n'en indiquent pas.
-# HYPOTHÈSE : GMT, comme la date limite du guide.
+# HYPOTHÈSE : GMT, comme la date limite du guide. La fiche observée n'affiche
+# aucun fuseau.
 timezone = "UTC"
 
 [export.columns]
 first_name = "first_name"
 last_name = "last_name"
 email = "email"
-score_percent = "score_percent"
-time_taken_minutes = "time_taken_minutes"
+# Durée : « hh:mm:ss », « mm:ss » ou un nombre de minutes.
+duration = "duration"
 completed_at = "completed_at"
+# Score. Laisser vide le nom d'une colonne absente de l'export : le pourcentage
+# est alors déduit des points et du total.
+score_percent = "score_percent"
+score_points = "score_points"
+score_max = "score_max"
+
+[test]
+# Structure relevée sur la fiche observée : 50 questions à 1 point, réparties en
+# quatre catégories. ClassMarker affiche aussi un score par catégorie
+# (« Statistics by Category ») : non exploité pour l'instant.
+total_points = 50
+categories = [
+    "Entrepreneurship & Business",              # 15 questions
+    "AI & Technology",                          # 15 questions
+    "Critical Thinking & Abstract Reasoning",   # 10 questions
+    "English & Professional Communication",     # 10 questions
+]
 
 [deadline]
 # Guide 2027 : date limite le 20 juillet à 23 h 59 GMT ; toute soumission après
@@ -28,15 +54,18 @@ completed_at = "completed_at"
 # promotion qui commence en 2027.
 deadline = 2026-07-20T23:59:59Z
 # La plateforme reste ouverte jusqu'au 22 juillet : une soumission du 21 ou du 22
-# est possible, et signalée. Information seulement (bornes du générateur).
+# est possible, et signalée. Confirmé par la fiche observée, terminée le 21
+# juillet à 17 h 52. Information seulement (bornes du générateur).
 platform_close = 2026-07-22T23:59:59Z
 
 [duration]
-# Durée prévue du test. HYPOTHÈSE : 70 minutes, durée du test TestGorilla du
-# formulaire 2026 ; la durée du test ClassMarker n'est pas donnée par le guide.
+# Durée prévue du test. Le guide ne la donne pas et la fiche observée ne la
+# porte pas : cette valeur reste une HYPOTHÈSE, héritée du test TestGorilla du
+# formulaire 2026. Seule durée réelle connue à ce jour : 38 min 06 s pour les
+# 50 questions, sur un seul candidat.
 allotted_minutes = 70
-# En dessous, la durée est signalée comme anormalement courte. Hypothèse :
-# environ 30 % du temps prévu. À recaler sur les durées réelles.
+# En dessous, la durée est signalée comme anormalement courte. HYPOTHÈSE sans
+# fondement empirique : à recaler sur les durées de l'export groupé réel.
 min_minutes = 20
 
 [matching]

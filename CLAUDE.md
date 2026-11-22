@@ -143,5 +143,10 @@ l'architecture cible décrite dans le mémoire. Ils ne sont pas à développer.
 - Les domaines de la grille du guide ne sont pas encore reportés :
   `grille.toml` garde la grille provisoire du mémoire. Ne pas inventer de noms
   ni de pondération.
-- Le format réel de l'export ClassMarker est inconnu : `assessment_results.csv`
-  est une supposition.
+- Le format des **valeurs** de ClassMarker est connu (fiche de résultat 2027
+  observée le 22 novembre 2026) : points sur 50, durée `hh:mm:ss`, date
+  `Tue 21 Jul '26 5:52pm`, 50 questions en quatre catégories. Les **noms de
+  colonnes** de l'export groupé restent inconnus : ceux de
+  `assessment_results.csv` sont une supposition.
+- La durée prévue du test (70 minutes) et le seuil « trop rapide » (20 minutes)
+  n'ont aucun fondement pour ClassMarker. Ne pas les présenter comme mesurés.

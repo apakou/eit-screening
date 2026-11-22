@@ -121,9 +121,24 @@ n'est rattachée à aucun : le module refuse de deviner.
 | `assessment_date_unreadable`, `assessment_duration_unreadable` | à vérifier | Cellule absente ou illisible |
 
 Les paramètres sont dans `src/eit_screening/screening/assessment.toml` : noms
-des colonnes et format de l'export (supposés), date limite, durée minimale,
-seuil de ressemblance des noms. Quand MEST fournira un vrai export, seul ce
+des colonnes, format des valeurs, date limite, durée minimale, seuil de
+ressemblance des noms. Quand MEST fournira un vrai export groupé, seul ce
 fichier devrait changer.
+
+Une fiche de résultat individuelle ClassMarker de la promotion 2027 a été
+observée le 22 novembre 2026. Elle fixe le **format des valeurs**, que le
+module lit désormais tel quel :
+
+| Champ | Format réel |
+|---|---|
+| Score | `Points: 46 / 50` et `92%` ; le pourcentage est déduit des points si sa colonne manque |
+| Durée | `00:38:06` (`hh:mm:ss`) ; `mm:ss` et un nombre de minutes restent acceptés |
+| Dates | `Tue 21 Jul '26 5:52pm` (`datetime_format = "classmarker"`), lues sans dépendre de la langue de la machine |
+| Test | 50 questions à 1 point, en quatre catégories (`[test]` dans `assessment.toml`) |
+
+Les **noms de colonnes** de l'export groupé (ClassMarker, Results → Download)
+restent inconnus : ceux du fichier fabriqué par `eit-generate` tiennent lieu de
+valeurs par défaut. Une colonne absente se déclare par une chaîne vide.
 
 ## Lire les pièces jointes et transcrire les vidéos
 
@@ -368,11 +383,17 @@ questions lues, aucun avertissement. Ce dossier n'est pas dans le dépôt.
 
 ## Hypothèses à confirmer avec MEST
 
-- **Export du test.** Les colonnes de `assessment_results.csv` sont une
-  supposition ; le format réel de l'export ClassMarker reste à obtenir.
+- **Colonnes de l'export groupé.** Le format des valeurs est connu (fiche
+  ClassMarker 2027 observée) ; les noms de colonnes de l'export groupé, non.
+  Ceux de `assessment_results.csv` restent une supposition.
 - **Date limite du test.** Guide 2027 : 20 juillet à 23 h 59 GMT ; l'année
   (2026) et le fuseau des dates de l'export (GMT) sont des hypothèses
-  (`assessment.toml`).
+  (`assessment.toml`). La fiche observée, terminée le 21 juillet à 17 h 52,
+  confirme que la plateforme accepte des soumissions après la date limite.
+- **Durée prévue du test.** Les 70 minutes viennent du test TestGorilla de 2026
+  et ne sont étayées par rien pour ClassMarker ; le seuil « trop rapide » de
+  20 minutes en dépend. Seule durée réelle connue : 38 min 06 s, sur un
+  candidat.
 - **Règles du guide 2027 non précisées** (dates du programme, liste des pays
   d'Afrique de l'Est, domaines de la grille) : voir `docs/cadrage.md`.
 - **Fichier manquant.** L'export réel d'une question de fichier sans réponse

@@ -113,6 +113,14 @@ inversé), aucune erreur, aucune ligne laissée de côté ; 1 test introuvable,
 eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scenarios data/fictifs/scenarios.csv -o data/resultats/appariement.json
 ```
 
+**À relancer.** Ces chiffres ont été obtenus avant le passage au format réel de
+ClassMarker (22 novembre 2026). Le contenu de la cohorte est inchangé — le
+générateur ne tire aucun nombre aléatoire de plus — mais l'export porte
+désormais des points sur 50, une durée `hh:mm:ss` et des dates
+`Tue 21 Jul '26 5:14pm`. Régénérer la cohorte et relancer `eit-assessment`
+avant de citer ces chiffres dans le mémoire : c'est rapide, aucun modèle n'est
+chargé.
+
 La vérité utilisée pour compter les erreurs de rattachement est la colonne
 `email_test` de `scenarios.csv`, ajoutée au générateur pour cette étape.
 Sur les graines 0 à 11 (468 lignes), 466 lignes sont rattachées, aucune au
@@ -130,7 +138,10 @@ Choix faits, à confirmer avec MEST :
   « à vérifier » `assessment_late`, et non plus une alerte). Hypothèses : année 2026,
   dates de l'export en GMT (`assessment.toml`, `timezone`) ;
 - durée anormalement courte : moins de 20 minutes sur 70. Ce constat est « à
-  vérifier », pas une alerte : une durée courte n'est pas une preuve de fraude ;
+  vérifier », pas une alerte : une durée courte n'est pas une preuve de fraude.
+  Les deux valeurs sont des hypothèses sans fondement pour ClassMarker : les
+  70 minutes viennent du test TestGorilla de 2026, et la seule durée réelle
+  connue est 38 min 06 s pour les 50 questions, sur un candidat ;
 - seuil de ressemblance des noms à 90/100. Deux personnes différentes peuvent
   l'atteindre (« Femi » et « Temi » Balogun : 92) ; dans ce cas la ligne n'est
   rattachée à personne et les deux dossiers reçoivent un constat « à vérifier » ;

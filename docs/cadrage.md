@@ -113,9 +113,11 @@ Hypothèses prises pour appliquer le guide, à confirmer avec MEST :
   sont dans la liste mais pas dans l'EAC.
 - **Année du test.** 2026 (20 juillet 2026), pour une promotion qui commence
   en 2027.
-- **Fuseau horaire de l'export ClassMarker.** GMT par défaut.
+- **Fuseau horaire de l'export ClassMarker.** GMT par défaut ; la fiche de
+  résultat observée n'affiche aucun fuseau.
 - **Durée du test ClassMarker.** Non donnée ; 70 minutes gardées (durée
-  TestGorilla 2026), seuil de durée anormale à 20 minutes.
+  TestGorilla 2026), seuil de durée anormale à 20 minutes. Une seule durée
+  réelle est connue : 38 min 06 s pour les 50 questions.
 
 ## Ce qui manque encore
 
@@ -129,7 +131,17 @@ Hypothèses prises pour appliquer le guide, à confirmer avec MEST :
   « Assessment not found », « Assessment concerns », « Generic AI responses ».
 - **Seuils de décision.** Rien ne dit à partir de quelle note un candidat est
   invité en entretien (hypothèses : 28 et 20 sur 40, `verdict.toml`).
-- **Format de l'export ClassMarker** (colonnes, format et fuseau des dates).
+- **Noms de colonnes de l'export groupé ClassMarker** (Results → Download). Le
+  format des valeurs, lui, est acquis : une fiche de résultat individuelle de la
+  promotion 2027 a été observée le 22 novembre 2026 (points sur 50, durée
+  `hh:mm:ss`, date `Tue 21 Jul '26 5:52pm`, 50 questions en quatre catégories :
+  Entrepreneurship & Business 15, AI & Technology 15, Critical Thinking &
+  Abstract Reasoning 10, English & Professional Communication 10). Cette fiche
+  porte des données personnelles d'un candidat : elle ne doit entrer ni dans le
+  dépôt, ni dans les tests, ni dans le mémoire.
+- **Score par catégorie.** ClassMarker en affiche un (« Statistics by
+  Category ») : signal non exploité, à demander s'il figure dans l'export
+  groupé.
 - **Accord écrit de MEST** pour l'envoi de texte anonymisé à un modèle hébergé.
 - **Accès aux vidéos.** L'export ne contient que des liens protégés. Le module
   attend les vidéos à côté du PDF (`personal_statement.mp4`,
