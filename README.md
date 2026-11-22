@@ -1,0 +1,189 @@
+# eit-screening
+
+Prototype d'aide à la présélection des candidatures du MEST AI Startup Program.
+
+Cette version contient quatre briques :
+
+- **l'import** : lit un dossier exporté en PDF depuis SurveyMonkey Apply et le
+  transforme en données structurées ;
+- **le générateur de dossiers fictifs** : fabrique des dossiers au même format,
+  avec des anomalies placées volontairement, pour tester le système sans
+  données personnelles réelles.
+- **les contrôles d'éligibilité** : âge, nationalité et réponses aux questions
+  d'éligibilité, sous forme de constats soumis à l'évaluateur ;
+- **l'appariement avec le test** : rattache chaque ligne de l'export de la
+  plateforme de test au bon dossier et relève les tests introuvables, en retard
+  ou trop rapides.
+
+Les étapes suivantes (anonymisation, indexation, recherche, notation, interface)
+viendront s'appuyer sur ces briques.
+
+## Installation
+
+Python 3.11 ou plus récent.
+
+```bash
+pip install -e ".[dev]"
+```
+
+## Importer un dossier
+
+```bash
+eit-import chemin/vers/application.pdf -o dossier.json
+```
+
+Le fichier JSON contient l'identité, les réponses d'éligibilité, la formation,
+les expériences, les cinq réponses libres, les fichiers envoyés, les références
+et le texte des pièces jointes. Les pièces jointes sans texte (certificat
+scanné, par exemple) sont marquées `needs_ocr`.
+
+Depuis Python :
+
+```python
+from eit_screening.ingestion.smapply_pdf import parse_application
+
+dossier = parse_application("application.pdf")
+print(dossier.personal.country_of_citizenship, len(dossier.essays))
+```
+
+L'import ne dépend pas du texte des questions pour repérer les réponses : il
+s'appuie sur la mise en page de l'export (réponse dans un rectangle gris,
+libellé au-dessus). Si MEST modifie son formulaire, toutes les questions restent
+lues et conservées dans `items` ; celles que le module ne sait pas ranger sont
+signalées dans `warnings`.
+
+## Contrôler l'éligibilité
+
+```bash
+eit-eligibility data/fictifs/dossiers --scenarios data/fictifs/scenarios.csv -o data/resultats/eligibilite.json
+```
+
+Pour chaque dossier, le module calcule l'âge à la date de référence, vérifie
+que la nationalité appartient à la zone et relève chaque réponse « No » aux
+questions d'éligibilité. Il produit des **constats**, jamais un rejet : chaque
+constat a un code, une gravité (`alerte` ou `à vérifier`), un message et les
+réponses du dossier qui le montrent, citées telles quelles.
+
+| Code | Gravité | Cas |
+|---|---|---|
+| `age_out_of_range` | alerte | Âge hors tranche |
+| `age_unknown` | à vérifier | Date de naissance absente ou illisible |
+| `citizenship_outside_region` | alerte, ou à vérifier si double nationalité | Nationalité hors zone |
+| `citizenship_unknown` | à vérifier | Nationalité absente ou illisible |
+| `eligibility_answer_no` | alerte | Réponse « No » à une question d'éligibilité |
+| `eligibility_answer_unreadable` | à vérifier | Réponse absente ou illisible |
+| `eligibility_answers_missing` | à vérifier | Aucune réponse d'éligibilité dans le dossier |
+
+Les paramètres sont dans `src/eit_screening/screening/eligibility.toml` (valeurs
+du formulaire 2026). Pour essayer les valeurs du mémoire, copier ce fichier, le
+modifier et le passer avec `--config`. L'option `--scenarios` compare les
+constats aux anomalies placées dans les dossiers fictifs.
+
+## Rattacher l'export du test
+
+```bash
+eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scenarios data/fictifs/scenarios.csv -o data/resultats/appariement.json
+```
+
+Chaque ligne de l'export est rattachée à un dossier par l'adresse e-mail, puis
+par le nom et le prénom inversés, puis par un nom ressemblant (sans casse ni
+accents, seuil réglable). Une ligne qui pourrait appartenir à deux dossiers
+n'est rattachée à aucun : le module refuse de deviner.
+
+| Code | Gravité | Cas |
+|---|---|---|
+| `assessment_not_found` | alerte | Aucune ligne de l'export pour ce dossier |
+| `assessment_late` | alerte | Test terminé après la date limite (jour compris) |
+| `assessment_too_fast` | à vérifier | Durée sous le seuil ; le score est cité |
+| `assessment_match_ambiguous` | à vérifier | Une ligne pourrait être la sienne comme celle d'un autre |
+| `assessment_multiple_results` | à vérifier | Plusieurs lignes pour ce dossier |
+| `assessment_date_unreadable`, `assessment_duration_unreadable` | à vérifier | Cellule absente ou illisible |
+
+Les paramètres sont dans `src/eit_screening/screening/assessment.toml` : noms
+des colonnes et format de l'export (supposés), date limite, durée minimale,
+seuil de ressemblance des noms. Quand MEST fournira un vrai export, seul ce
+fichier devrait changer.
+
+## Générer des dossiers fictifs
+
+```bash
+eit-generate -n 40 --graine 2026 -o data/fictifs
+```
+
+La même graine redonne toujours la même cohorte.
+
+| Fichier | Contenu |
+|---|---|
+| `dossiers/<numéro>/application.pdf` | Dossier au format de l'export |
+| `dossiers/<numéro>/reference.json` | Données exactes ayant servi à fabriquer le PDF |
+| `dossiers/<numéro>/personal_statement.txt` | Transcription de la vidéo de présentation |
+| `dossiers/<numéro>/assessment_reflection.txt` | Transcription de la vidéo de réflexion |
+| `assessment_results.csv` | Export de la plateforme de test |
+| `scenarios.csv` | Niveau et anomalie de chaque dossier, adresse de sa ligne dans l'export du test (`email_test`) |
+
+### Niveaux et anomalies
+
+Chaque dossier a un niveau (`fort`, `moyen`, `faible`) qui règle la qualité des
+réponses, du parcours et du score au test. Quarante pour cent des dossiers
+portent en plus une anomalie :
+
+| Code | Anomalie |
+|---|---|
+| `assessment_name_swapped` | Nom et prénom inversés dans l'export du test, avec une autre adresse e-mail |
+| `assessment_not_found` | Aucun résultat de test |
+| `assessment_late` | Test passé après la date limite |
+| `assessment_too_fast` | Test terminé en un temps anormalement court avec un score élevé |
+| `generic_ai_answers` | Réponses libres génériques, sans aucun fait personnel |
+| `age_out_of_range` | Date de naissance hors tranche, malgré la réponse « Yes » |
+| `citizenship_outside_region` | Nationalité hors Afrique de l'Ouest, malgré la réponse « Yes » |
+| `missing_resume` | CV non fourni |
+| `poor_audio` | Vidéo de présentation presque inaudible |
+
+`scenarios.csv` dit ce que le système doit retrouver. Il ne remplace pas la note
+d'un évaluateur : il décrit seulement ce qui a été construit.
+
+## Tests
+
+```bash
+pytest
+```
+
+Les tests génèrent 40 dossiers, les relisent avec le module d'import et
+vérifient que chaque champ relu est identique à la référence.
+
+L'import a aussi été vérifié sur un dossier réel de la cohorte 2026 : 73
+questions lues, aucun avertissement. Ce dossier n'est pas dans le dépôt.
+
+## Hypothèses à confirmer avec MEST
+
+- **Export du test.** Les colonnes de `assessment_results.csv` sont une
+  supposition ; le format réel de la plateforme de test reste à obtenir.
+- **Date limite du test.** Fixée au 10 août 2025 dans `profiles.py` et dans
+  `assessment.toml`.
+- **Fichier manquant.** L'export réel d'une question de fichier sans réponse
+  n'a pas été observé ; le générateur écrit « (No response) ».
+- **Questions conditionnelles.** Les champs de parrainage et « If Other » ne
+  sont écrits que lorsqu'ils s'appliquent.
+- **Pièces jointes.** L'export ne dit pas à quel fichier correspond chaque
+  page ajoutée ; l'import les garde dans l'ordre, sans les rattacher.
+
+## Limites des dossiers fictifs
+
+- Les réponses libres viennent d'une banque de textes (`content.py`). Sur 40
+  dossiers, un même texte peut revenir jusqu'à quatre fois. La banque doit être
+  enrichie avant de faire noter les dossiers par des évaluateurs.
+- Les vidéos ne sont pas fabriquées : les fichiers `.txt` tiennent lieu de
+  sortie de la reconnaissance vocale.
+
+## Confidentialité
+
+- Tous les noms, adresses et numéros des dossiers fictifs sont inventés
+  (domaines `example.*`, numéros au préfixe `000`).
+- Le dossier `data/` n'est jamais versionné. Les dossiers réels ne doivent pas
+  quitter la machine de la personne autorisée à les traiter.
+
+## Suite du projet
+
+- `CLAUDE.md` : règles du projet, lues par Claude Code à l'ouverture.
+- `docs/cadrage.md` : périmètre, décisions prises, points à confirmer avec MEST.
+- `docs/feuille-de-route.md` : étapes à venir et critères d'acceptation.

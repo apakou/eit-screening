@@ -1,0 +1,43 @@
+# Paramètres des contrôles d'éligibilité.
+#
+# Valeurs du formulaire « MEST AI Startup Program (Class of 2026) ».
+# Le mémoire en donne d'autres (21 à 35 ans, Afrique de l'Est ou de l'Ouest) :
+# tant que MEST n'a pas tranché, on suit le formulaire (voir docs/cadrage.md).
+# Pour essayer une autre règle, copier ce fichier, le modifier et le passer
+# avec l'option --config.
+
+[age]
+min = 21
+max = 30
+# Date à laquelle l'âge est calculé. Hypothèse : début du programme
+# (janvier 2026). Le formulaire ne la précise pas ; à confirmer avec MEST.
+reference_date = 2026-01-01
+
+[citizenship]
+zone_name = "Afrique de l'Ouest"
+# Définition retenue : les 16 pays de l'Afrique de l'Ouest selon la
+# classification géographique de l'ONU (M49). Elle inclut le Mali, le Burkina
+# Faso et le Niger, sortis de la CEDEAO en 2025, ainsi que la Mauritanie.
+countries = [
+    "Benin", "Burkina Faso", "Cabo Verde", "Côte d'Ivoire", "Gambia", "Ghana",
+    "Guinea", "Guinea-Bissau", "Liberia", "Mali", "Mauritania", "Niger",
+    "Nigeria", "Senegal", "Sierra Leone", "Togo",
+]
+
+# Autres graphies possibles d'un même pays (comparaison sans casse, sans
+# accents et sans « The » initial).
+[citizenship.aliases]
+"Ivory Coast" = "Côte d'Ivoire"
+"Cape Verde" = "Cabo Verde"
+"Bénin" = "Benin"
+"Sénégal" = "Senegal"
+"Guinée" = "Guinea"
+"Guinée-Bissau" = "Guinea-Bissau"
+"Mauritanie" = "Mauritania"
+"Libéria" = "Liberia"
+
+[questions]
+# Clés des questions d'éligibilité reliées à une donnée du dossier :
+# une réponse « Yes » y est confrontée à l'âge ou à la nationalité déclarés.
+age = "age_in_range"
+citizenship = "citizen_of_region"

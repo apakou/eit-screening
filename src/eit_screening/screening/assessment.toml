@@ -1,0 +1,39 @@
+# Paramètres de l'appariement avec l'export de la plateforme de test.
+#
+# Le format réel de l'export n'est pas connu : les noms de colonnes ci-dessous
+# décrivent le fichier fabriqué par eit-generate (assessment_results.csv).
+# Quand MEST fournira un vrai export, adapter cette section, pas le code.
+
+[export]
+delimiter = ","
+encoding = "utf-8"
+# Format de la date de fin du test (codes strftime). Vide : ISO 8601.
+datetime_format = ""
+
+[export.columns]
+first_name = "first_name"
+last_name = "last_name"
+email = "email"
+score_percent = "score_percent"
+time_taken_minutes = "time_taken_minutes"
+completed_at = "completed_at"
+
+[deadline]
+# Dernier jour pour passer le test, compris. Hypothèse reprise du générateur
+# de dossiers fictifs ; la vraie date limite reste à obtenir de MEST.
+last_day = 2025-08-10
+
+[duration]
+# Durée prévue du test (formulaire 2026 : TestGorilla, 70 minutes).
+allotted_minutes = 70
+# En dessous, la durée est signalée comme anormalement courte. Hypothèse :
+# environ 30 % du temps prévu. À recaler sur les durées réelles.
+min_minutes = 20
+
+[matching]
+# Ressemblance minimale (0 à 100) entre nom complet du dossier et de l'export,
+# sans casse, sans accents et sans tenir compte de l'ordre des mots.
+# Deux personnes différentes peuvent atteindre 92 (« Femi » et « Temi » avec le
+# même nom de famille) : si deux candidats dépassent le seuil, la ligne n'est
+# rattachée à personne.
+name_threshold = 90
