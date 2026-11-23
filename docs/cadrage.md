@@ -127,8 +127,13 @@ Hypothèses prises pour appliquer le guide, à confirmer avec MEST :
   du mémoire (Resume & Technical Experience, Entrepreneurial Motivation &
   Vision, Communication & Clarity, Program Fit & Collaboration), marqués comme
   provisoires ; aucune pondération ne doit être inventée.
-- **Concerns.** Le mémoire en annonce 8 ; seuls trois noms sont connus :
-  « Assessment not found », « Assessment concerns », « Generic AI responses ».
+- ~~**Concerns.**~~ Obtenus le 23 novembre 2026 : les huit drapeaux du tableau
+  de bord de revue de la cohorte 2027 sont dans `grille.toml`. Trois sont
+  produits automatiquement (`assessment_not_found`, `assessment_concerns`,
+  `assessment_late_submission` par les contrôles ; `generic_ai_responses` par le
+  modèle, soit quatre clés pour trois sources) ; les quatre autres restent à la
+  main de l'évaluateur. Reste ouvert : faut-il détecter les quatre autres, et à
+  quel prix en fausses alertes.
 - **Seuils de décision.** Rien ne dit à partir de quelle note un candidat est
   invité en entretien (hypothèses : 28 et 20 sur 40, `verdict.toml`).
 - **Noms de colonnes de l'export groupé ClassMarker** (Results → Download). Le

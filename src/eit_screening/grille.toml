@@ -35,16 +35,51 @@ name = "Program Fit & Collaboration"
 max_points = 10
 query = "Teamwork, leadership, collaborating with others, resilience after setbacks and readiness for an intensive startup program."
 
-# Concerns : 8 selon le mémoire, dont 3 seulement sont nommés. Les autres
-# restent à obtenir de MEST.
+# Concerns : les huit drapeaux du tableau de bord utilisé pour la revue des
+# candidatures de la cohorte 2027, repris dans leur ordre et avec leur libellé
+# exact. « detection » dit comment le prototype produit chaque drapeau :
+#   controle : règle déterministe des étapes 1 et 2 (éligibilité, test) ;
+#   modele   : jugement du modèle de langage, avec citation vérifiée ;
+#   manuel   : aucune détection automatique ; l'évaluateur le coche lui-même.
+# Ne pas inventer de détection pour un drapeau « manuel » : l'afficher comme
+# détecté sans qu'aucun code ne le produise fausserait l'évaluation.
+
 [[concerns]]
-key = "assessment_not_found"
-name = "Assessment not found"
+key = "incomplete_responses"
+name = "Incomplete or very limited responses"
+detection = "manuel"
+
+[[concerns]]
+key = "generic_ai_responses"
+name = "Generic or potentially AI-generated responses"
+detection = "modele"
+
+[[concerns]]
+key = "limited_technical_experience"
+name = "Limited evidence of relevant technical experience"
+detection = "manuel"
+
+[[concerns]]
+key = "video_concerns"
+name = "Video concerns"
+detection = "manuel"
 
 [[concerns]]
 key = "assessment_concerns"
 name = "Assessment concerns"
+detection = "controle"
 
 [[concerns]]
-key = "generic_ai_responses"
-name = "Generic AI responses"
+key = "assessment_late_submission"
+name = "Assessment submitted after deadline"
+detection = "controle"
+
+[[concerns]]
+key = "assessment_not_found"
+name = "Assessment not found"
+detection = "controle"
+
+[[concerns]]
+key = "other_concern"
+name = "Other? Please include in Review Comments"
+detection = "manuel"

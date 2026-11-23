@@ -168,9 +168,12 @@ def locate_quote(quote: str, dossier: AnonymizedDossier) -> QuoteLocation | None
 # Constats des étapes 1 et 2 et règle de décision
 # --------------------------------------------------------------------------
 
+# Constat de l'étape 2 -> drapeau du tableau de bord de revue 2027. Le retard a
+# son propre drapeau sur ce tableau de bord : il ne se replie pas sur
+# « Assessment concerns ».
 ASSESSMENT_CONCERNS = {
     "assessment_not_found": "assessment_not_found",
-    "assessment_late": "assessment_concerns",
+    "assessment_late": "assessment_late_submission",
     "assessment_too_fast": "assessment_concerns",
     "assessment_multiple_results": "assessment_concerns",
     "assessment_match_ambiguous": "assessment_concerns",

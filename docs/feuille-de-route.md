@@ -113,13 +113,9 @@ inversé), aucune erreur, aucune ligne laissée de côté ; 1 test introuvable,
 eit-assessment data/fictifs/dossiers data/fictifs/assessment_results.csv --scenarios data/fictifs/scenarios.csv -o data/resultats/appariement.json
 ```
 
-**À relancer.** Ces chiffres ont été obtenus avant le passage au format réel de
-ClassMarker (22 novembre 2026). Le contenu de la cohorte est inchangé — le
-générateur ne tire aucun nombre aléatoire de plus — mais l'export porte
-désormais des points sur 50, une durée `hh:mm:ss` et des dates
-`Tue 21 Jul '26 5:14pm`. Régénérer la cohorte et relancer `eit-assessment`
-avant de citer ces chiffres dans le mémoire : c'est rapide, aucun modèle n'est
-chargé.
+Chiffres relancés le 23 novembre 2026 sur la cohorte régénérée au format réel
+de ClassMarker (points sur 50, durée `hh:mm:ss`, dates `Sat 11 Jul '26 4:18pm`) :
+résultat identique, 39 lignes sur 39 au bon dossier.
 
 La vérité utilisée pour compter les erreurs de rattachement est la colonne
 `email_test` de `scenarios.csv`, ajoutée au générateur pour cette étape.

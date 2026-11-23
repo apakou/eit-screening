@@ -394,6 +394,12 @@ questions lues, aucun avertissement. Ce dossier n'est pas dans le dépôt.
   et ne sont étayées par rien pour ClassMarker ; le seuil « trop rapide » de
   20 minutes en dépend. Seule durée réelle connue : 38 min 06 s, sur un
   candidat.
+- **Détection des Concerns.** Huit drapeaux, repris du tableau de bord de revue
+  2027. Le prototype en produit quatre clés : « Assessment not found »,
+  « Assessment concerns », « Assessment submitted after deadline » (contrôles de
+  l'étape 2) et « Generic or potentially AI-generated responses » (modèle, avec
+  citation vérifiée). Les quatre autres sont déclarés `detection = "manuel"` :
+  l'évaluateur les coche lui-même.
 - **Règles du guide 2027 non précisées** (dates du programme, liste des pays
   d'Afrique de l'Est, domaines de la grille) : voir `docs/cadrage.md`.
 - **Fichier manquant.** L'export réel d'une question de fichier sans réponse

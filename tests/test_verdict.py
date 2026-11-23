@@ -13,6 +13,7 @@ from eit_screening.search.retrieve import Hit
 from eit_screening.verdict.client import ChatClient
 from eit_screening.verdict.models import load_config
 from eit_screening.verdict.propose import (
+    ASSESSMENT_CONCERNS,
     ConcernResult,
     build_messages,
     decide,
@@ -145,7 +146,7 @@ def test_findings_from_earlier_steps():
     verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG, findings=[late])
     assert verdict.proposed == "Interview Invitation" and verdict.request_further_review
     assert any("assessment_late" in r for r in verdict.review_reasons)
-    assert [c.key for c in verdict.concerns] == ["assessment_concerns"]
+    assert [c.key for c in verdict.concerns] == ["assessment_late_submission"]
 
 
 @pytest.mark.parametrize("code", ["age_out_of_range", "citizenship_outside_region", "graduation_after_cutoff"])
@@ -226,3 +227,36 @@ def test_full_dossier_variant_sends_every_text_but_no_file_names():
     client, seen = _client(_answer())
     verdict, _, _ = propose(dossier, {}, GRID, client, CONFIG, full_dossier=True)
     assert verdict.llm.schema_valid and verdict.criteria[0].passage_ids == []
+
+
+# --- Concerns du tableau de bord de revue 2027 -------------------------------
+
+DASHBOARD_CONCERNS = [
+    "Incomplete or very limited responses",
+    "Generic or potentially AI-generated responses",
+    "Limited evidence of relevant technical experience",
+    "Video concerns",
+    "Assessment concerns",
+    "Assessment submitted after deadline",
+    "Assessment not found",
+    "Other? Please include in Review Comments",
+]
+
+
+def test_grid_carries_the_eight_dashboard_concerns():
+    """Les huit drapeaux du tableau de bord, dans leur ordre et avec leur libellé."""
+    assert [c.name for c in load_grid().concerns] == DASHBOARD_CONCERNS
+
+
+def test_no_concern_is_detected_unless_the_grid_says_so():
+    """Un drapeau « manuel » ne doit jamais sortir d'un constat ni du modèle.
+
+    Sans ce contrôle, ajouter une détection pour un drapeau que personne ne
+    produit ferait passer pour automatique ce qui reste à la charge de
+    l'évaluateur, et fausserait la mesure de détection.
+    """
+    grid = load_grid()
+    declared = {c.key for c in grid.concerns if c.detection != "manuel"}
+    produced = set(ASSESSMENT_CONCERNS.values()) | {"generic_ai_responses"}
+    assert produced == declared
+    assert {c.key for c in grid.concerns} >= produced

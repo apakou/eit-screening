@@ -33,7 +33,7 @@ conservées.
 | `src/eit_screening/media/` | Fait. Pièces jointes (Docling, OCR) et vidéos (FFmpeg, faster-whisper), paramètres dans `media.toml` |
 | `src/eit_screening/search/` | Fait (indexation). Découpage, bge-m3, Qdrant ; paramètres dans `search.toml` |
 | `src/eit_screening/search/retrieve.py` | Construit et mesuré, critère non atteint ; chaîne par défaut : dense (voir feuille de route, étape 6) |
-| `src/eit_screening/grille.toml`, `grid.py` | Grille provisoire (mémoire) en configuration, domaines du guide à reporter |
+| `src/eit_screening/grille.toml`, `grid.py` | Critères provisoires (mémoire) ; les 8 Concerns sont ceux du tableau de bord 2027 |
 | `src/eit_screening/verdict/` | Écrit et testé (faux serveur) ; aucun verdict produit sur la cohorte 2027. Décision à trois valeurs + revue complémentaire ; paramètres dans `verdict.toml` |
 | `src/eit_screening/api/` | Écrit et testé (SQLite) ; jamais lancé contre PostgreSQL avec de vrais verdicts |
 | `ui/` | Écrit, types et lint vérifiés ; jamais ouvert dans un navigateur |
@@ -131,9 +131,14 @@ l'architecture cible décrite dans le mémoire. Ils ne sont pas à développer.
 
 ## Points incertains à ne pas trancher seul
 
-- La grille sur 40 points et la liste exacte des 8 Concerns viennent du mémoire,
-  pas d'un document de MEST. Elles sont dans `src/eit_screening/grille.toml`,
-  jamais codées en dur.
+- La grille sur 40 points vient du mémoire, pas d'un document de MEST. Elle est
+  dans `src/eit_screening/grille.toml`, jamais codée en dur.
+- Les **huit Concerns sont connus** : ce sont les drapeaux du tableau de bord de
+  revue de la cohorte 2027, repris dans `grille.toml` avec leur libellé exact.
+  Chacun porte un champ `detection` : `controle`, `modele` ou `manuel`. Trois
+  seulement sont produits automatiquement ; ne jamais inventer de détection pour
+  un drapeau `manuel`, le test `test_no_concern_is_detected_unless_the_grid_says_so`
+  le vérifie.
 - Le guide d'évaluation 2027 de MEST est la référence (voir
   `docs/cadrage.md`) : âge 21-35 au 1er janvier 2027, Afrique de l'Ouest ou de
   l'Est, diplôme avant 2028, test ClassMarker (date limite 20 juillet 23 h 59
