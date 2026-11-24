@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 # Les dossiers de candidature, réels ou fictifs, ne sont jamais versionnés.
 data/
+.claude/
+# Liaison au projet Vercel et variables tirées de Vercel (adresse de la base, code d'accès).
+.vercel/
+.env*

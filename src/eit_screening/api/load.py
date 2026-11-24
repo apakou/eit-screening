@@ -2,6 +2,11 @@
 
 Recharger met à jour les candidatures ; le journal des décisions n'est jamais
 touché.
+
+Une base hébergée (Supabase) ne reçoit que des données fictives : les dossiers
+réels restent sur la machine de la personne autorisée (CLAUDE.md, règles sur
+les données). Le chargement vers une base qui n'est pas locale exige donc
+l'option --donnees-fictives, déclaration explicite de la personne qui charge.
 """
 
 from __future__ import annotations
@@ -11,7 +16,7 @@ import json
 import sys
 from pathlib import Path
 
-from .db import Candidate, database_url, make_engine, make_sessionmaker, now
+from .db import Candidate, database_url, is_local, make_engine, make_sessionmaker, now
 
 
 def load(verdicts: Path, anonymized: Path, url: str | None = None, sessions=None) -> int:
@@ -51,9 +56,21 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Charge verdicts et dossiers anonymisés dans la base de l'API.")
     parser.add_argument("--verdicts", type=Path, default=Path("data/verdicts"))
     parser.add_argument("--anonymises", type=Path, default=Path("data/anonymises"))
-    parser.add_argument("--database-url", help=f"Défaut : variable EIT_DATABASE_URL ou {database_url()}")
+    parser.add_argument("--database-url", help="Défaut : variable EIT_DATABASE_URL, sinon la base Docker locale")
+    parser.add_argument(
+        "--donnees-fictives", action="store_true",
+        help="Déclare que les dossiers chargés sont fictifs ; obligatoire pour une base hébergée",
+    )
     args = parser.parse_args(argv)
-    count = load(args.verdicts, args.anonymises, args.database_url)
+    url = args.database_url or database_url()
+    if not is_local(url) and not args.donnees_fictives:
+        print(
+            "Base hébergée : seules des données fictives peuvent y être chargées. "
+            "Relancer avec --donnees-fictives si c'est le cas ; les dossiers réels restent en local.",
+            file=sys.stderr,
+        )
+        return 2
+    count = load(args.verdicts, args.anonymises, url)
     print(f"{count} candidatures chargées.")
     return 0 if count else 1
 

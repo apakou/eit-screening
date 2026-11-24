@@ -6,6 +6,9 @@ diplôme) et relève chaque réponse « No ». Il produit des **constats**, jama
 dit ce qui pose question et cite l'élément du dossier qui le montre ;
 l'évaluateur tranche.
 
+Les messages des constats sont en anglais : ils s'affichent sur la plateforme
+des évaluateurs de MEST. Les sorties de la ligne de commande restent en français.
+
 Les paramètres (tranche d'âge, date de référence, pays de la zone, années
 d'obtention du diplôme) viennent d'un fichier TOML. Le fichier par défaut,
 ``eligibility.toml``, suit le guide d'évaluation 2027 ; un autre fichier peut
@@ -28,7 +31,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .. import __version__
 from ..models import Application, EligibilityAnswer, FormItem
-from .common import SEVERITY_LABELS, Evidence, Finding, git_commit, plain_text
+from .common import SEVERITY_LABELS, Evidence, Finding, day, git_commit, month, plain_text
 
 # --------------------------------------------------------------------------
 # Configuration
@@ -170,10 +173,10 @@ def _answer_evidence(app: Application, key: str) -> tuple[Evidence | None, bool 
 
 def _declared(answer: bool | None) -> str:
     if answer is True:
-        return "alors que le candidat a répondu « Yes » à la question d'éligibilité"
+        return "although the applicant answered “Yes” to the eligibility question"
     if answer is False:
-        return "ce que confirme la réponse « No » du candidat à la question d'éligibilité"
-    return "et la réponse du candidat à la question d'éligibilité est absente ou illisible"
+        return "as the applicant's “No” to the eligibility question confirms"
+    return "and the applicant's answer to the eligibility question is missing or unreadable"
 
 
 def _check_age(app: Application, rule: AgeRule, key: str) -> tuple[int | None, Finding | None]:
@@ -186,11 +189,11 @@ def _check_age(app: Application, rule: AgeRule, key: str) -> tuple[int | None, F
         return None, Finding(
             code="age_unknown",
             severity="to_check",
-            message="Date de naissance absente ou illisible : l'âge ne peut pas être contrôlé.",
+            message="Date of birth missing or unreadable: age cannot be checked.",
             evidence=evidence,
         )
     age = age_on(birth, rule.reference_date)
-    reference = f"{rule.reference_date:%d/%m/%Y}"
+    reference = day(rule.reference_date)
     submitted = app.last_submitted.date() if app.last_submitted else None
 
     def borderline(message: str) -> tuple[int, Finding]:
@@ -198,23 +201,23 @@ def _check_age(app: Application, rule: AgeRule, key: str) -> tuple[int | None, F
 
     if age == rule.min - 1 and rule.program_start and age_on(birth, rule.program_start) >= rule.min:
         return borderline(
-            f"{age} ans au {reference}, mais {rule.min} ans au démarrage du programme "
-            f"({rule.program_start:%d/%m/%Y}) : à examiner, pas à écarter."
+            f"{age} on {reference}, but {rule.min} at programme start ({day(rule.program_start)}): "
+            "flagged for review, not excluded."
         )
     if age == rule.min and submitted and age_on(birth, submitted) < rule.min:
         return borderline(
-            f"{age_on(birth, submitted)} ans au dépôt du dossier ({submitted:%d/%m/%Y}), {age} ans au {reference} : "
-            "dans la tranche à la date de référence ; signalé pour examen."
+            f"{age_on(birth, submitted)} when the application was submitted ({day(submitted)}), {age} on {reference}: "
+            "within range on the reference date; flagged for review."
         )
     if age == rule.max:
         if rule.program_end is None:
             return borderline(
-                f"{age} ans au {reference} : pourrait atteindre {age + 1} ans pendant le programme ; signalé pour examen."
+                f"{age} on {reference}: may turn {age + 1} during the programme; flagged for review."
             )
         if age_on(birth, rule.program_end) > rule.max:
             return borderline(
-                f"{age} ans au {reference}, {age_on(birth, rule.program_end)} ans à la fin du programme "
-                f"({rule.program_end:%d/%m/%Y}) ; signalé pour examen."
+                f"{age} on {reference}, {age_on(birth, rule.program_end)} at programme end "
+                f"({day(rule.program_end)}); flagged for review."
             )
     if rule.min <= age <= rule.max:
         return age, None
@@ -222,8 +225,7 @@ def _check_age(app: Application, rule: AgeRule, key: str) -> tuple[int | None, F
         code="age_out_of_range",
         severity="alert",
         message=(
-            f"{age} ans au {rule.reference_date:%d/%m/%Y}, hors de la tranche {rule.min}-{rule.max} ans, "
-            f"{_declared(answer)}."
+            f"{age} on {reference}, outside the {rule.min}–{rule.max} age range, {_declared(answer)}."
         ),
         evidence=evidence,
     )
@@ -241,14 +243,13 @@ def _check_citizenship(app: Application, rule: CitizenshipRule, key: str) -> Fin
         return Finding(
             code="citizenship_unknown",
             severity="to_check",
-            message="Nationalité absente ou illisible : la zone géographique ne peut pas être contrôlée.",
+            message="Citizenship missing or unreadable: the eligible region cannot be checked.",
             evidence=evidence,
         )
     if rule.in_zone(person.country_of_citizenship):
         return None
     message = (
-        f"Nationalité déclarée « {person.country_of_citizenship} », hors de la zone "
-        f"« {rule.zone_name} », {_declared(answer)}."
+        f"Declared citizenship “{person.country_of_citizenship}” is outside {rule.zone_name}, {_declared(answer)}."
     )
     if person.dual_citizenship:
         # Le formulaire ne donne pas la seconde nationalité : elle peut être dans la zone.
@@ -258,7 +259,7 @@ def _check_citizenship(app: Application, rule: CitizenshipRule, key: str) -> Fin
         return Finding(
             code="citizenship_outside_region",
             severity="to_check",
-            message=message + " Le candidat déclare une double nationalité, que le dossier ne précise pas.",
+            message=message + " The applicant declares dual citizenship; the application does not say which.",
             evidence=evidence,
         )
     return Finding(code="citizenship_outside_region", severity="alert", message=message, evidence=evidence)
@@ -274,20 +275,20 @@ def _check_education(app: Application, rule: EducationRule) -> Finding | None:
            if "eligibility" not in (i.task or "").casefold() and _same_question(i.question, "Graduation date")]
     value = raw[index] if index < len(raw) else latest.isoformat()
     evidence = [Evidence(field=f"education[{index}].graduation_date", question="Graduation date", value=value)]
-    several = " (date la plus tardive des formations déclarées)" if len(dated) > 1 else ""
+    several = " (latest of the degrees declared)" if len(dated) > 1 else ""
     if latest.year >= rule.excluded_from_year:
         return Finding(
             code="graduation_after_cutoff",
             severity="alert",
-            message=f"Diplôme obtenu en {latest:%m/%Y}{several} : à partir de {rule.excluded_from_year}, "
-            "le guide écarte la candidature.",
+            message=f"Graduation in {month(latest)}{several}: from {rule.excluded_from_year}, "
+            "the evaluation guide excludes the application.",
             evidence=evidence,
         )
     if latest.year == rule.review_year:
         return Finding(
             code="graduation_review",
             severity="to_check",
-            message=f"Diplôme obtenu en {latest:%m/%Y}{several} : année {rule.review_year}, le mois est à examiner.",
+            message=f"Graduation in {month(latest)}{several}: {rule.review_year} graduates are flagged; check the month.",
             evidence=evidence,
         )
     return None
@@ -320,7 +321,7 @@ def check_eligibility(app: Application, config: EligibilityConfig | None = None)
             Finding(
                 code="eligibility_answers_missing",
                 severity="to_check",
-                message="Aucune réponse aux questions d'éligibilité n'a été trouvée dans le dossier.",
+                message="No answers to the eligibility questions were found in the application.",
             )
         )
 
@@ -331,11 +332,11 @@ def check_eligibility(app: Application, config: EligibilityConfig | None = None)
             continue
         evidence = [_eligibility_evidence(app, answer)]
         if answer.answer is False:
-            message = f"Réponse « No » à la question d'éligibilité : « {answer.question} »."
+            message = f"Answered “No” to the eligibility question “{answer.question}”."
             if answer.key == keys.age and age is not None:
-                message += f" Pourtant, le candidat a {age} ans au {config.age.reference_date:%d/%m/%Y}."
+                message += f" Yet the applicant is {age} on {day(config.age.reference_date)}."
             elif answer.key == keys.citizenship and app.personal.country_of_citizenship:
-                message += f" Pourtant, la nationalité déclarée est « {app.personal.country_of_citizenship} »."
+                message += f" Yet the declared citizenship is “{app.personal.country_of_citizenship}”."
             findings.append(
                 Finding(code="eligibility_answer_no", severity="alert", message=message, evidence=evidence)
             )
@@ -344,7 +345,7 @@ def check_eligibility(app: Application, config: EligibilityConfig | None = None)
                 Finding(
                     code="eligibility_answer_unreadable",
                     severity="to_check",
-                    message=f"Réponse absente ou illisible à la question d'éligibilité : « {answer.question} ».",
+                    message=f"Missing or unreadable answer to the eligibility question “{answer.question}”.",
                     evidence=evidence,
                 )
             )

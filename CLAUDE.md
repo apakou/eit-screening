@@ -33,10 +33,10 @@ conservées.
 | `src/eit_screening/media/` | Fait. Pièces jointes (Docling, OCR) et vidéos (FFmpeg, faster-whisper), paramètres dans `media.toml` |
 | `src/eit_screening/search/` | Fait (indexation). Découpage, bge-m3, Qdrant ; paramètres dans `search.toml` |
 | `src/eit_screening/search/retrieve.py` | Construit et mesuré, critère non atteint ; chaîne par défaut : dense (voir feuille de route, étape 6) |
-| `src/eit_screening/grille.toml`, `grid.py` | Grille provisoire (mémoire) en configuration, domaines du guide à reporter |
+| `src/eit_screening/grille.toml`, `grid.py` | Critères provisoires (mémoire) ; les 8 Concerns sont ceux du tableau de bord 2027 |
 | `src/eit_screening/verdict/` | Écrit et testé (faux serveur) ; aucun verdict produit sur la cohorte 2027. Décision à trois valeurs + revue complémentaire ; paramètres dans `verdict.toml` |
 | `src/eit_screening/api/` | Écrit et testé (SQLite) ; jamais lancé contre PostgreSQL avec de vrais verdicts |
-| `ui/` | Écrit, types et lint vérifiés ; jamais ouvert dans un navigateur |
+| `ui/` | Fait, en anglais. Vérifié dans le navigateur avec les 40 verdicts ; formulaire de décision jamais soumis. Visite guidée de la session de test (« Test session » dans la barre latérale), retours enregistrés dans la table `tour_feedback` (`/api/feedback`) ; envoi jamais fait depuis l'interface |
 | `src/eit_screening/evaluation/` | Écrit et testé (outils) ; `eit-evaluate` et `eit-counterfactual` jamais exécutés |
 
 Le détail des étapes et leurs critères d'acceptation sont dans
@@ -61,6 +61,7 @@ eit-index data/anonymises --qdrant-url http://127.0.0.1:6333 -o data/resultats/i
 eit-search-eval --qdrant-url http://127.0.0.1:6333 -o data/resultats/recherche.json   # environ 40 min
 eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json   # Ollama local, environ 1 h
 eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json --dossier-entier -o data/verdicts-dossier-entier
+eit-verdict-recalcul --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json   # constats et décisions recalculés, sans le modèle
 docker compose up -d postgres && eit-api-load && eit-api                   # API sur http://127.0.0.1:8000
 cd ui && pnpm install && pnpm dev --port 3100                                 # interface
 eit-evaluate --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json   # export unique des mesures
@@ -104,8 +105,13 @@ tueur de processus du noyau, qui a fermé l'application Claude.
 
 ## Conventions de code
 
-- Python 3.11 ou plus. Identifiants en anglais ; commentaires, docstrings et
-  messages destinés à l'utilisateur en français.
+- Python 3.11 ou plus. Identifiants en anglais ; commentaires et docstrings en
+  français.
+- Langue des messages : la **plateforme des évaluateurs est en anglais**
+  (interface, messages de l'API, textes affichés : constats, règle de décision,
+  raisons de la revue). Les outils en ligne de commande, la documentation et le
+  mémoire restent en français. Les marques d'anonymisation des données restent
+  en français (`[PAYS]`…) ; l'interface les affiche en anglais (`[COUNTRY]`…).
 - Modèles de données avec Pydantic v2, dans `models.py` ou à côté du module
   concerné. Les modules échangent des objets typés, pas des dictionnaires.
 - Chaque étape apporte ses tests. Les tests n'utilisent que des dossiers fictifs
@@ -131,9 +137,14 @@ l'architecture cible décrite dans le mémoire. Ils ne sont pas à développer.
 
 ## Points incertains à ne pas trancher seul
 
-- La grille sur 40 points et la liste exacte des 8 Concerns viennent du mémoire,
-  pas d'un document de MEST. Elles sont dans `src/eit_screening/grille.toml`,
-  jamais codées en dur.
+- La grille sur 40 points vient du mémoire, pas d'un document de MEST. Elle est
+  dans `src/eit_screening/grille.toml`, jamais codée en dur.
+- Les **huit Concerns sont connus** : ce sont les drapeaux du tableau de bord de
+  revue de la cohorte 2027, repris dans `grille.toml` avec leur libellé exact.
+  Chacun porte un champ `detection` : `controle`, `modele` ou `manuel`. Trois
+  seulement sont produits automatiquement ; ne jamais inventer de détection pour
+  un drapeau `manuel`, le test `test_no_concern_is_detected_unless_the_grid_says_so`
+  le vérifie.
 - Le guide d'évaluation 2027 de MEST est la référence (voir
   `docs/cadrage.md`) : âge 21-35 au 1er janvier 2027, Afrique de l'Ouest ou de
   l'Est, diplôme avant 2028, test ClassMarker (date limite 20 juillet 23 h 59
@@ -143,5 +154,10 @@ l'architecture cible décrite dans le mémoire. Ils ne sont pas à développer.
 - Les domaines de la grille du guide ne sont pas encore reportés :
   `grille.toml` garde la grille provisoire du mémoire. Ne pas inventer de noms
   ni de pondération.
-- Le format réel de l'export ClassMarker est inconnu : `assessment_results.csv`
-  est une supposition.
+- Le format des **valeurs** de ClassMarker est connu (fiche de résultat 2027
+  observée le 22 novembre 2026) : points sur 50, durée `hh:mm:ss`, date
+  `Tue 21 Jul '26 5:52pm`, 50 questions en quatre catégories. Les **noms de
+  colonnes** de l'export groupé restent inconnus : ceux de
+  `assessment_results.csv` sont une supposition.
+- La durée prévue du test (70 minutes) et le seuil « trop rapide » (20 minutes)
+  n'ont aucun fondement pour ClassMarker. Ne pas les présenter comme mesurés.

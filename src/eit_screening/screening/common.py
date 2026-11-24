@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import subprocess
 import unicodedata
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -65,3 +66,16 @@ def git_commit() -> str | None:
     if commit and status.stdout.strip():
         commit += "-modifié"
     return commit
+
+
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def day(value: date) -> str:
+    """Date affichée aux évaluateurs (« 1 Jan 2027 »), indépendante de la langue de la machine."""
+    return f"{value.day} {_MONTHS[value.month - 1]} {value.year}"
+
+
+def month(value: date) -> str:
+    """Mois affiché aux évaluateurs (« Sep 2027 »)."""
+    return f"{_MONTHS[value.month - 1]} {value.year}"

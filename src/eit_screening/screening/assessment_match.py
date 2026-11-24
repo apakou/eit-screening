@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 import tomllib
 from collections import defaultdict
@@ -36,7 +37,7 @@ from rapidfuzz import fuzz
 
 from .. import __version__
 from ..models import Application
-from .common import SEVERITY_LABELS, Evidence, Finding, git_commit, plain_text
+from .common import SEVERITY_LABELS, Evidence, Finding, day, git_commit, plain_text
 
 # --------------------------------------------------------------------------
 # Configuration
@@ -44,12 +45,23 @@ from .common import SEVERITY_LABELS, Evidence, Finding, git_commit, plain_text
 
 
 class ExportColumns(BaseModel):
+    """Noms des colonnes de l'export. Une chaîne vide : colonne absente de cet export."""
+
     first_name: str = "first_name"
     last_name: str = "last_name"
     email: str = "email"
-    score_percent: str = "score_percent"
-    time_taken_minutes: str = "time_taken_minutes"
+    duration: str = "duration"
     completed_at: str = "completed_at"
+    # Score : une fiche ClassMarker porte les points obtenus, le total et le
+    # pourcentage. Le pourcentage est déduit des points quand sa colonne manque.
+    score_percent: str = "score_percent"
+    score_points: str = ""
+    score_max: str = ""
+
+    @property
+    def declared(self) -> list[str]:
+        """Colonnes annoncées par la configuration, donc attendues dans l'export."""
+        return [name for name in self.model_dump().values() if name]
 
 
 class ExportFormat(BaseModel):
@@ -80,11 +92,19 @@ class MatchingRule(BaseModel):
     name_threshold: float = Field(ge=0, le=100)
 
 
+class TestStructure(BaseModel):
+    """Structure du test, relevée sur une fiche de résultat ClassMarker."""
+
+    total_points: float | None = None
+    categories: list[str] = Field(default_factory=list)
+
+
 class AssessmentConfig(BaseModel):
     export: ExportFormat = Field(default_factory=ExportFormat)
     deadline: DeadlineRule
     duration: DurationRule
     matching: MatchingRule
+    test: TestStructure = Field(default_factory=TestStructure)
 
 
 DEFAULT_CONFIG = "assessment.toml"
@@ -112,6 +132,8 @@ class AssessmentRow(BaseModel):
     last_name: str | None = None
     email: str | None = None
     score_percent: float | None = None
+    score_points: float | None = None
+    score_max: float | None = None
     time_taken_minutes: float | None = None
     completed_at: datetime | None = None
     raw: dict[str, str] = Field(default_factory=dict)
@@ -129,10 +151,70 @@ def _number(text: str | None) -> float | None:
         return None
 
 
-def _datetime(text: str | None, fmt: str) -> datetime | None:
+# Formats relevés sur une fiche de résultat ClassMarker de la promotion 2027 :
+#     Points: 46 / 50     Duration: 00:38:06     Date finished: Tue 21 Jul '26 5:52pm
+CLASSMARKER_FORMAT = "classmarker"
+
+_MONTHS = {
+    name: number
+    for number, name in enumerate(
+        ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), start=1
+    )
+}
+
+_CLASSMARKER_DATE = re.compile(
+    r"^(?:[A-Za-z]{3},?\s+)?(?P<day>\d{1,2})\s+(?P<month>[A-Za-z]{3})[a-z]*\s+'?(?P<year>\d{4}|\d{2})"
+    r"(?:\s+(?P<hour>\d{1,2}):(?P<minute>\d{2})\s*(?P<meridiem>[AaPp]\.?[Mm]\.?)?)?$"
+)
+
+_DURATION = re.compile(r"^(?:(?P<hours>\d+):)?(?P<minutes>\d{1,2}):(?P<seconds>\d{2})$")
+
+
+def _classmarker_datetime(text: str) -> datetime | None:
+    """Lit « Tue 21 Jul '26 5:52pm ».
+
+    Les noms de jour et de mois sont lus en anglais, sans dépendre de la langue
+    de la machine : ``strptime`` et ses codes ``%a`` et ``%b`` suivent la locale.
+    """
+    match = _CLASSMARKER_DATE.match(text)
+    if match is None:
+        return None
+    month = _MONTHS.get(match["month"].lower())
+    if month is None:
+        return None
+    year = int(match["year"])
+    if len(match["year"]) == 2:
+        year += 2000
+    hour, minute = int(match["hour"] or 0), int(match["minute"] or 0)
+    meridiem = (match["meridiem"] or "").replace(".", "").lower()
+    if meridiem == "pm" and hour != 12:
+        hour += 12
+    elif meridiem == "am" and hour == 12:
+        hour = 0
+    try:
+        return datetime(year, month, int(match["day"]), hour, minute)
+    except ValueError:
+        return None
+
+
+def _duration_minutes(text: str | None) -> float | None:
+    """Durée en minutes. Accepte « hh:mm:ss », « mm:ss » ou un nombre de minutes."""
     text = (text or "").strip()
     if not text:
         return None
+    match = _DURATION.match(text)
+    if match is None:
+        return _number(text)
+    return int(match["hours"] or 0) * 60 + int(match["minutes"]) + int(match["seconds"]) / 60
+
+
+def _datetime(text: str | None, fmt: str) -> datetime | None:
+    """Date de l'export : ``classmarker``, vide (ISO 8601) ou codes strftime."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    if fmt == CLASSMARKER_FORMAT:
+        return _classmarker_datetime(text)
     try:
         return datetime.strptime(text, fmt) if fmt else datetime.fromisoformat(text)
     except ValueError:
@@ -146,20 +228,32 @@ def read_export(path: Path | str, config: AssessmentConfig | None = None) -> lis
     rows: list[AssessmentRow] = []
     with open(path, newline="", encoding=fmt.encoding) as handle:
         reader = csv.DictReader(handle, delimiter=fmt.delimiter)
-        missing = [name for name in columns.model_dump().values() if name not in (reader.fieldnames or [])]
+        missing = [name for name in columns.declared if name not in (reader.fieldnames or [])]
         if missing:
             raise ValueError(f"Colonnes absentes de l'export du test : {', '.join(missing)}")
         for record in reader:
             raw = {key: (value or "") for key, value in record.items() if key is not None}
+
+            def cell(column: str, source: dict[str, str] = raw) -> str:
+                """Cellule d'une colonne ; chaîne vide si la colonne n'est pas déclarée."""
+                return source.get(column, "") if column else ""
+
+            points = _number(cell(columns.score_points))
+            maximum = _number(cell(columns.score_max)) or config.test.total_points
+            percent = _number(cell(columns.score_percent))
+            if percent is None and points is not None and maximum:
+                percent = round(points / maximum * 100, 2)
             rows.append(
                 AssessmentRow(
                     line=reader.line_num,
-                    first_name=raw[columns.first_name].strip() or None,
-                    last_name=raw[columns.last_name].strip() or None,
-                    email=raw[columns.email].strip() or None,
-                    score_percent=_number(raw[columns.score_percent]),
-                    time_taken_minutes=_number(raw[columns.time_taken_minutes]),
-                    completed_at=_datetime(raw[columns.completed_at], fmt.datetime_format),
+                    first_name=cell(columns.first_name).strip() or None,
+                    last_name=cell(columns.last_name).strip() or None,
+                    email=cell(columns.email).strip() or None,
+                    score_percent=percent,
+                    score_points=points,
+                    score_max=maximum,
+                    time_taken_minutes=_duration_minutes(cell(columns.duration)),
+                    completed_at=_datetime(cell(columns.completed_at), fmt.datetime_format),
                     raw=raw,
                 )
             )
@@ -253,7 +347,7 @@ class MatchingResult(BaseModel):
 
 
 def _source(export_name: str, row: AssessmentRow) -> str:
-    return f"{export_name}, ligne {row.line}"
+    return f"{export_name}, row {row.line}"
 
 
 def _cell(row: AssessmentRow, field: str, column: str, export_name: str) -> Evidence:
@@ -301,7 +395,7 @@ def _row_findings(row: AssessmentRow, config: AssessmentConfig, export_name: str
             Finding(
                 code="assessment_date_unreadable",
                 severity="to_check",
-                message="Date de fin du test absente ou illisible : le respect de la date limite ne peut pas être contrôlé.",
+                message="Assessment completion date missing or unreadable: the deadline cannot be checked.",
                 evidence=[completed],
             )
         )
@@ -312,34 +406,34 @@ def _row_findings(row: AssessmentRow, config: AssessmentConfig, export_name: str
                 code="assessment_late",
                 severity="to_check",
                 message=(
-                    f"Test soumis le {gmt:%d/%m/%Y à %H:%M} GMT, après la date limite du "
-                    f"{deadline.astimezone(timezone.utc):%d/%m/%Y à %H:%M} GMT."
+                    f"Assessment submitted on {day(gmt)} at {gmt:%H:%M} GMT, after the deadline of "
+                    f"{day(deadline.astimezone(timezone.utc))} at {deadline.astimezone(timezone.utc):%H:%M} GMT."
                 ),
                 evidence=[completed],
             )
         )
 
-    duration = _cell(row, "time_taken_minutes", columns.time_taken_minutes, export_name)
-    score = _cell(row, "score_percent", columns.score_percent, export_name)
+    duration = _cell(row, "duration", columns.duration, export_name)
+    score = _cell(row, "score_percent", columns.score_percent or columns.score_points, export_name)
     rule = config.duration
     if row.time_taken_minutes is None:
         findings.append(
             Finding(
                 code="assessment_duration_unreadable",
                 severity="to_check",
-                message="Durée du test absente ou illisible.",
+                message="Assessment duration missing or unreadable.",
                 evidence=[duration],
             )
         )
     elif row.time_taken_minutes < rule.min_minutes:
-        score_text = "illisible" if row.score_percent is None else f"{row.score_percent:g} %"
+        score_text = "unreadable" if row.score_percent is None else f"{row.score_percent:g}%"
         findings.append(
             Finding(
                 code="assessment_too_fast",
                 severity="to_check",
                 message=(
-                    f"Test terminé en {row.time_taken_minutes:g} minutes sur {rule.allotted_minutes:g} prévues "
-                    f"(seuil : {rule.min_minutes:g} minutes), avec un score de {score_text}."
+                    f"Assessment completed in {row.time_taken_minutes:.1f} of {rule.allotted_minutes:g} minutes "
+                    f"(threshold: {rule.min_minutes:g} minutes), with a score of {score_text}."
                 ),
                 evidence=[duration, score],
             )
@@ -411,8 +505,8 @@ def match_assessments(
                         code="assessment_multiple_results",
                         severity="to_check",
                         message=(
-                            f"{len(own)} lignes de l'export correspondent à ce dossier ; "
-                            f"la plus ancienne (ligne {row.line}) est retenue pour les contrôles."
+                            f"{len(own)} rows of the assessment export match this application; "
+                            f"the earliest (row {row.line}) is used for the checks."
                         ),
                         evidence=[e for other, _ in own for e in _row_identity(other, columns, export_name)],
                     )
@@ -423,8 +517,8 @@ def match_assessments(
                     code="assessment_match_ambiguous",
                     severity="to_check",
                     message=(
-                        f"La ligne {row.line} de l'export pourrait correspondre à ce dossier comme à un autre : "
-                        "elle n'a été rattachée à aucun des deux."
+                        f"Row {row.line} of the assessment export could belong to this application or to another one: "
+                        "it was attached to neither."
                     ),
                     evidence=_row_identity(row, columns, export_name),
                 )
@@ -438,7 +532,7 @@ def match_assessments(
                 Finding(
                     code="assessment_not_found",
                     severity="alert",
-                    message="Aucune ligne de l'export du test ne correspond à ce dossier (ni l'e-mail, ni le nom).",
+                    message="No row of the assessment export matches this application (neither email nor name).",
                     evidence=evidence,
                 )
             )
@@ -559,7 +653,8 @@ def _print_result(result: MatchingResult) -> None:
             print(f"{match.application_id:<12} {'-':>5}  {method:<16} {'-':>5} {'-':>5}  {'-':<16} {codes}")
             continue
         score = "?" if row.score_percent is None else f"{row.score_percent:g}"
-        minutes = "?" if row.time_taken_minutes is None else f"{row.time_taken_minutes:g}"
+        # Les durées de l'export sont au format hh:mm:ss : arrondies ici à la minute près.
+        minutes = "?" if row.time_taken_minutes is None else f"{row.time_taken_minutes:.1f}"
         done = row.completed_at.strftime("%d/%m/%Y %H:%M") if row.completed_at else "?"
         print(f"{match.application_id:<12} {row.line:>5}  {method:<16} {score:>5} {minutes:>5}  {done:<16} {codes}")
     for match in result.matches:

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
+
+import { AccessGate } from "@/components/access-gate";
+import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,26 +15,27 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Titres et grands chiffres.
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "Présélection MEST",
-  description: "Verdicts proposés et validation par les évaluateurs",
+  title: "MEST pre-screening",
+  description: "Proposed decisions, validated by MEST evaluators",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="fr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col bg-background text-foreground">
-        <header className="border-b">
-          <div className="mx-auto flex max-w-7xl items-baseline justify-between gap-4 px-4 py-3">
-            <Link href="/" className="font-semibold">
-              Présélection MEST AI Startup Program
-            </Link>
-            <p className="text-sm text-muted-foreground">
-              Le système propose, l&apos;évaluateur décide.
-            </p>
-          </div>
-        </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} ${bricolage.variable} h-full antialiased`}
+    >
+      <body className="min-h-full bg-paper text-ink">
+        <AccessGate>
+          <AppShell>{children}</AppShell>
+        </AccessGate>
       </body>
     </html>
   );

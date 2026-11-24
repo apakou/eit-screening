@@ -148,7 +148,7 @@ def test_twenty_at_submission_but_twenty_one_at_reference_is_flagged_not_exclude
     app = _submitted(_application(date_of_birth=date(2005, 10, 1)), date(2026, 7, 10))
     (finding,) = check_eligibility(app, CONFIG).findings
     assert (finding.code, finding.severity) == ("age_borderline", "to_check")
-    assert "20 ans au dépôt" in finding.message
+    assert "20 when the application was submitted" in finding.message
 
 
 def test_twenty_one_at_submission_is_not_flagged():
@@ -165,7 +165,7 @@ def test_thirty_five_against_a_known_programme_end():
     config = _config(program_end=date(2027, 3, 31))
     assert check_eligibility(_application(date_of_birth=date(1991, 6, 1)), config).findings == []
     (finding,) = check_eligibility(_application(date_of_birth=date(1991, 2, 1)), config).findings
-    assert finding.code == "age_borderline" and "36 ans à la fin" in finding.message
+    assert finding.code == "age_borderline" and "36 at programme end" in finding.message
 
 
 def test_twenty_at_reference_but_twenty_one_at_a_known_start():
@@ -265,7 +265,7 @@ def test_graduation_in_2028_is_excluded():
 def test_graduation_in_2027_is_flagged_with_its_month():
     (finding,) = check_eligibility(_graduating(date(2027, 9, 15)), CONFIG).findings
     assert (finding.code, finding.severity) == ("graduation_review", "to_check")
-    assert "09/2027" in finding.message
+    assert "Sep 2027" in finding.message
 
 
 def test_graduation_before_2027_is_fine():
@@ -274,7 +274,7 @@ def test_graduation_before_2027_is_fine():
 
 def test_latest_degree_counts():
     (finding,) = check_eligibility(_graduating(date(2022, 6, 1), date(2028, 1, 15)), CONFIG).findings
-    assert finding.code == "graduation_after_cutoff" and "plus tardive" in finding.message
+    assert finding.code == "graduation_after_cutoff" and "latest of the degrees" in finding.message
     assert finding.evidence[0].field == "education[1].graduation_date"
 
 
@@ -294,7 +294,7 @@ def test_no_to_age_question_despite_age_in_range():
     app = _set_answer(_application(date_of_birth=date(2000, 6, 1)), "age_in_range", False)
     (finding,) = check_eligibility(app, CONFIG).findings
     assert finding.code == "eligibility_answer_no"
-    assert "26 ans" in finding.message
+    assert "is 26 on 1 Jan 2027" in finding.message
 
 
 def test_unreadable_answer_is_to_check():

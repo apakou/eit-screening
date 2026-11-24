@@ -37,6 +37,7 @@ AGE_MIN, AGE_MAX = 21, 35
 ASSESSMENT_DEADLINE = date(2026, 7, 20)  # jour compris, jusqu'à 23 h 59 GMT
 PLATFORM_CLOSE = date(2026, 7, 22)
 ASSESSMENT_MINUTES = 70  # hypothèse : durée du test ClassMarker non donnée par le guide
+ASSESSMENT_TOTAL_POINTS = 50  # relevé sur une fiche de résultat ClassMarker 2027
 ID_PREFIX = "EIT-2027-"
 UPLOAD_BASE_URL = "https://apply.example.org/protected"
 
@@ -479,10 +480,29 @@ def build_dossier(number: int, scenario: Scenario, rng: random.Random, picker: _
     )
 
 
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _classmarker_date(moment: datetime) -> str:
+    """Écrit « Tue 21 Jul '26 5:14pm », format des fiches de résultat ClassMarker."""
+    hour = moment.hour % 12 or 12
+    meridiem = "am" if moment.hour < 12 else "pm"
+    return (
+        f"{_WEEKDAYS[moment.weekday()]} {moment.day} {_MONTHS[moment.month - 1]} "
+        f"'{moment:%y} {hour}:{moment:%M}{meridiem}"
+    )
+
+
 def _assessment_row(
     application: Application, scenario: Scenario, day: date, rng: random.Random
 ) -> dict | None:
-    """Ligne du candidat dans l'export de la plateforme de test."""
+    """Ligne du candidat dans l'export de la plateforme de test.
+
+    Les valeurs suivent les formats relevés sur une fiche ClassMarker 2027 :
+    points sur 50, durée « hh:mm:ss », date « Tue 21 Jul '26 5:14pm ». Les noms
+    de colonnes, eux, restent une supposition (voir ``assessment.toml``).
+    """
     if scenario.has("assessment_not_found"):
         return None
     low, high = {"fort": (68, 95), "moyen": (48, 78), "faible": (22, 55)}[scenario.tier]
@@ -498,14 +518,25 @@ def _assessment_row(
     elif rng.random() < 0.25:
         # Variation de saisie banale : nom en capitales.
         last_name = last_name.upper()
+    points = round(score * ASSESSMENT_TOTAL_POINTS / 100)
+    percent = round(points / ASSESSMENT_TOTAL_POINTS * 100, 1)
+    # Secondes déduites des valeurs déjà tirées, et non d'un tirage de plus :
+    # consommer le générateur aléatoire ici décalerait toute la cohorte.
+    seconds = (minutes * 7 + points) % 60
     completed = datetime(day.year, day.month, day.day, rng.randint(7, 22), rng.randint(0, 59))
     return {
         "first_name": first_name,
         "last_name": last_name,
         "email": email,
-        "score_percent": score,
-        "time_taken_minutes": minutes,
-        "completed_at": completed.isoformat(timespec="minutes"),
+        "score_points": points,
+        "score_max": ASSESSMENT_TOTAL_POINTS,
+        "score_percent": f"{percent:g}%",
+        "duration": f"{minutes // 60:02d}:{minutes % 60:02d}:{seconds:02d}",
+        "completed_at": _classmarker_date(completed),
+        # Valeurs commodes pour scenarios.csv et les tests. Ce ne sont pas des
+        # colonnes de l'export : l'écriture du CSV les ignore.
+        "time_taken_minutes": round(minutes + seconds / 60, 2),
+        "completed_at_iso": completed.isoformat(timespec="minutes"),
     }
 
 

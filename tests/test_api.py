@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from eit_screening.api.app import create_app
-from eit_screening.api.load import load
+from eit_screening.api.db import is_local, normalize_url
+from eit_screening.api.load import load, main as load_main
 from eit_screening.privacy.anonymize import AnonymizedDossier, AnonymizedText, Metadata
 from eit_screening.screening.common import Finding
 from eit_screening.verdict.models import LlmCall, Verdict
@@ -48,7 +49,7 @@ def client(tmp_path):
 def test_list_sort_and_filter(client):
     rows = client.get("/api/candidates", params={"sort": "total", "order": "desc"}).json()
     assert [r["pseudonym"] for r in rows] == ["C-0000000C", "C-0000000A", "C-0000000B", "C-0000000D"]
-    assert rows[0]["alerts"] == 1 and rows[0]["age"] == 36 and rows[0]["status"] == "à traiter"
+    assert rows[0]["alerts"] == 1 and rows[0]["age"] == 36 and rows[0]["status"] == "pending"
     only = client.get("/api/candidates", params={"verdict": "Waitlist"}).json()
     assert [r["pseudonym"] for r in only] == ["C-0000000B"]
     review = client.get("/api/candidates", params={"review": True}).json()
@@ -71,7 +72,7 @@ def test_validate_keeps_both_verdicts(client):
     assert decision["proposed"] == decision["retained"] == "Interview Invitation"
     assert decision["proposed_review"] is decision["retained_review"] is False
     rows = {r["pseudonym"]: r for r in client.get("/api/candidates").json()}
-    assert rows["C-0000000A"]["status"] == "validé"
+    assert rows["C-0000000A"]["status"] == "validated"
 
 
 def test_modify_needs_a_verdict_and_a_comment(client):
@@ -113,7 +114,7 @@ def test_journal_keeps_every_decision(client):
         ("E1", "Interview Reject", True), ("E2", "Waitlist", False),
     ]
     detail = client.get("/api/candidates/C-0000000C").json()
-    assert detail["status"] == "modifié" and detail["retained"] == "Waitlist" and detail["retained_review"] is False
+    assert detail["status"] == "modified" and detail["retained"] == "Waitlist" and detail["retained_review"] is False
     assert len(detail["decisions"]) == 2
 
 
@@ -126,3 +127,62 @@ def test_reload_keeps_decisions(client, tmp_path):
 def test_health(client):
     assert client.get("/api/health").json() == {"status": "ok"}
     assert json.loads(client.get("/openapi.json").text)["info"]["title"] == "eit-screening"
+
+
+def test_feedback_is_kept_with_each_step(client):
+    body = {
+        "evaluator": "E1", "ease": 4, "comment": "Clair.",
+        "steps": [
+            {"step": "filters", "title": "Filter by decision", "result": "worked"},
+            {"step": "quotes", "title": "Check a quote", "result": "failed", "note": "La citation ne s'affiche pas."},
+            {"step": "log", "title": "Decision log", "result": "skipped"},
+        ],
+    }
+    saved = client.post("/api/feedback", json=body).json()
+    assert saved["id"] and saved["ease"] == 4
+    listed = client.get("/api/feedback").json()
+    assert [s["result"] for s in listed[0]["steps"]] == ["worked", "failed", "skipped"]
+
+
+def test_feedback_needs_a_name_and_a_note_on_failures(client):
+    failed = {"step": "quotes", "result": "failed", "note": " "}
+    assert client.post("/api/feedback", json={"evaluator": "E1", "steps": [failed]}).status_code == 422
+    assert client.post("/api/feedback", json={"evaluator": "  ", "steps": []}).status_code == 422
+    assert client.post("/api/feedback", json={"evaluator": "E1", "steps": [], "ease": 6}).status_code == 422
+    assert client.get("/api/feedback").json() == []
+
+
+def test_hosted_urls_use_psycopg_and_are_not_local():
+    hosted = "postgresql://postgres.abc:secret@aws-0-eu-central-1.pooler.supabase.com:5432/postgres"
+    assert normalize_url(hosted).startswith("postgresql+psycopg://postgres.abc:")
+    assert normalize_url("postgres://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+    assert not is_local(hosted)
+    assert is_local("postgresql+psycopg://eit:eit@127.0.0.1:5433/eit") and is_local(URL)
+
+
+def test_loading_a_hosted_database_needs_the_fictional_data_flag(tmp_path, capsys):
+    hosted = "postgresql://u:p@db.example.supabase.co:5432/postgres"
+    assert load_main(["--verdicts", str(tmp_path), "--anonymises", str(tmp_path), "--database-url", hosted]) == 2
+    assert "données fictives" in capsys.readouterr().err
+
+
+def test_access_code_guards_every_route_but_health():
+    app = create_app(URL, access_code="mest-2027")
+    c = TestClient(app)
+    assert c.get("/api/health").status_code == 200
+    assert c.get("/api/candidates").json() == {"detail": "Access code required."}
+    assert c.get("/api/candidates", headers={"X-Access-Code": "faux"}).status_code == 401
+    assert c.post("/api/feedback", json={"evaluator": "E1", "steps": []}).status_code == 401
+    ok = {"X-Access-Code": "mest-2027"}
+    assert c.get("/api/candidates", headers=ok).status_code == 200
+    assert c.get("/api/access", headers=ok).json() == {"status": "ok", "code_required": True}
+
+
+def test_no_access_code_means_open_api(client):
+    assert client.get("/api/access").json() == {"status": "ok", "code_required": False}
+
+
+def test_refusals_carry_cors_headers():
+    c = TestClient(create_app(URL, access_code="mest-2027"))
+    r = c.get("/api/candidates", headers={"Origin": "http://localhost:3100"})
+    assert r.status_code == 401 and r.headers["access-control-allow-origin"] == "http://localhost:3100"

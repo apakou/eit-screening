@@ -67,6 +67,16 @@ Le code doit donc produire ses premiers chiffres avant le 6 décembre.
   déduire la nationalité. Les noms d'établissements et d'employeurs sont gardés
   pour le critère CV ; ils laissent parfois deviner le pays, et ce biais résiduel
   sera mesuré par un test contrefactuel.
+- **Base hébergée Supabase, données fictives seulement** (24 novembre 2026).
+  Un projet Supabase (PostgreSQL, région Europe, offre gratuite) peut remplacer
+  la base Docker locale pour les sessions de test avec l'équipe de recrutement.
+  Il ne reçoit que la cohorte fictive, les décisions prises dessus et les retours
+  de la visite guidée. Les dossiers réels restent en local : `eit-api-load`
+  refuse une base qui n'est pas locale sans l'option `--donnees-fictives`.
+- **Mise en ligne sur Vercel, offre gratuite** (24 novembre 2026). Interface et
+  API dans un même projet (Vercel Services), base Supabase, données fictives
+  seulement. Un code d'accès partagé protège le journal des décisions, qui sert
+  à la mesure d'alignement ; ce n'est pas une authentification.
 - **Honnêteté du mémoire.** Le texte distingue ce qui est construit et mesuré de
   ce qui est seulement conçu.
 
@@ -113,9 +123,11 @@ Hypothèses prises pour appliquer le guide, à confirmer avec MEST :
   sont dans la liste mais pas dans l'EAC.
 - **Année du test.** 2026 (20 juillet 2026), pour une promotion qui commence
   en 2027.
-- **Fuseau horaire de l'export ClassMarker.** GMT par défaut.
+- **Fuseau horaire de l'export ClassMarker.** GMT par défaut ; la fiche de
+  résultat observée n'affiche aucun fuseau.
 - **Durée du test ClassMarker.** Non donnée ; 70 minutes gardées (durée
-  TestGorilla 2026), seuil de durée anormale à 20 minutes.
+  TestGorilla 2026), seuil de durée anormale à 20 minutes. Une seule durée
+  réelle est connue : 38 min 06 s pour les 50 questions.
 
 ## Ce qui manque encore
 
@@ -125,11 +137,26 @@ Hypothèses prises pour appliquer le guide, à confirmer avec MEST :
   du mémoire (Resume & Technical Experience, Entrepreneurial Motivation &
   Vision, Communication & Clarity, Program Fit & Collaboration), marqués comme
   provisoires ; aucune pondération ne doit être inventée.
-- **Concerns.** Le mémoire en annonce 8 ; seuls trois noms sont connus :
-  « Assessment not found », « Assessment concerns », « Generic AI responses ».
+- ~~**Concerns.**~~ Obtenus le 23 novembre 2026 : les huit drapeaux du tableau
+  de bord de revue de la cohorte 2027 sont dans `grille.toml`. Trois sont
+  produits automatiquement (`assessment_not_found`, `assessment_concerns`,
+  `assessment_late_submission` par les contrôles ; `generic_ai_responses` par le
+  modèle, soit quatre clés pour trois sources) ; les quatre autres restent à la
+  main de l'évaluateur. Reste ouvert : faut-il détecter les quatre autres, et à
+  quel prix en fausses alertes.
 - **Seuils de décision.** Rien ne dit à partir de quelle note un candidat est
   invité en entretien (hypothèses : 28 et 20 sur 40, `verdict.toml`).
-- **Format de l'export ClassMarker** (colonnes, format et fuseau des dates).
+- **Noms de colonnes de l'export groupé ClassMarker** (Results → Download). Le
+  format des valeurs, lui, est acquis : une fiche de résultat individuelle de la
+  promotion 2027 a été observée le 22 novembre 2026 (points sur 50, durée
+  `hh:mm:ss`, date `Tue 21 Jul '26 5:52pm`, 50 questions en quatre catégories :
+  Entrepreneurship & Business 15, AI & Technology 15, Critical Thinking &
+  Abstract Reasoning 10, English & Professional Communication 10). Cette fiche
+  porte des données personnelles d'un candidat : elle ne doit entrer ni dans le
+  dépôt, ni dans les tests, ni dans le mémoire.
+- **Score par catégorie.** ClassMarker en affiche un (« Statistics by
+  Category ») : signal non exploité, à demander s'il figure dans l'export
+  groupé.
 - **Accord écrit de MEST** pour l'envoi de texte anonymisé à un modèle hébergé.
 - **Accès aux vidéos.** L'export ne contient que des liens protégés. Le module
   attend les vidéos à côté du PDF (`personal_statement.mp4`,

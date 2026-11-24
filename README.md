@@ -121,9 +121,24 @@ n'est rattachée à aucun : le module refuse de deviner.
 | `assessment_date_unreadable`, `assessment_duration_unreadable` | à vérifier | Cellule absente ou illisible |
 
 Les paramètres sont dans `src/eit_screening/screening/assessment.toml` : noms
-des colonnes et format de l'export (supposés), date limite, durée minimale,
-seuil de ressemblance des noms. Quand MEST fournira un vrai export, seul ce
+des colonnes, format des valeurs, date limite, durée minimale, seuil de
+ressemblance des noms. Quand MEST fournira un vrai export groupé, seul ce
 fichier devrait changer.
+
+Une fiche de résultat individuelle ClassMarker de la promotion 2027 a été
+observée le 22 novembre 2026. Elle fixe le **format des valeurs**, que le
+module lit désormais tel quel :
+
+| Champ | Format réel |
+|---|---|
+| Score | `Points: 46 / 50` et `92%` ; le pourcentage est déduit des points si sa colonne manque |
+| Durée | `00:38:06` (`hh:mm:ss`) ; `mm:ss` et un nombre de minutes restent acceptés |
+| Dates | `Tue 21 Jul '26 5:52pm` (`datetime_format = "classmarker"`), lues sans dépendre de la langue de la machine |
+| Test | 50 questions à 1 point, en quatre catégories (`[test]` dans `assessment.toml`) |
+
+Les **noms de colonnes** de l'export groupé (ClassMarker, Results → Download)
+restent inconnus : ceux du fichier fabriqué par `eit-generate` tiennent lieu de
+valeurs par défaut. Une colonne absente se déclare par une chaîne vide.
 
 ## Lire les pièces jointes et transcrire les vidéos
 
@@ -263,6 +278,11 @@ nationalité, ni numéro de candidature.
 `--dossier-entier` lance la variante de comparaison sans recherche (tout le
 dossier dans le prompt).
 
+`eit-verdict-recalcul` recalcule les constats, les Concerns relevés par les
+contrôles et la décision proposée à partir des verdicts existants, sans rappeler
+le modèle : utile après un changement des contrôles, de la règle de décision ou
+des textes affichés.
+
 ## API et interface
 
 ```bash
@@ -279,13 +299,61 @@ l'évaluateur, la date, la décision et la demande de revue proposées et retenu
 n'est jamais réécrit. Pas d'authentification dans le prototype : l'évaluateur
 saisit son nom.
 
-L'interface (Next.js, TypeScript, Tailwind CSS, shadcn/ui) a deux écrans :
+L'interface (Next.js, TypeScript, Tailwind CSS, shadcn/ui) est en anglais,
+comme les messages de l'API et les textes affichés : elle s'adresse aux
+évaluateurs de MEST. Elle a deux écrans, plus le journal des décisions
+(`/decisions`) :
 
 - **tableau des candidatures**, triable (total, alertes, Concerns, âge) et
   filtrable (verdict, statut, genre) ;
 - **dossier** : verdict, règle appliquée, constats et raisons à gauche ; dossier
   anonymisé à droite, citations vérifiées surlignées ; boutons pour valider ou
   modifier, et historique des décisions.
+
+Le bouton **Test session** de la barre latérale ouvre une visite guidée de la
+session de test : à chaque étape, l'évaluateur fait l'action décrite et dit si
+le résultat attendu s'est produit. À la fin, ses réponses et son avis sont
+enregistrés dans la table `tour_feedback` (`GET /api/feedback` pour les lire).
+
+### Base hébergée (Supabase), données fictives seulement
+
+L'adresse de la base se règle par `EIT_DATABASE_URL` ; le format donné par
+Supabase (`postgresql://…`) est accepté tel quel. Garder cette adresse, qui
+contient le mot de passe, hors du dépôt, par exemple dans
+`~/.config/eit-screening/supabase.env` :
+
+```bash
+export EIT_DATABASE_URL='postgresql://postgres.<projet>:<mot de passe>@<hôte du pooler>:5432/postgres'
+```
+
+```bash
+. ~/.config/eit-screening/supabase.env && eit-api-load --donnees-fictives
+. ~/.config/eit-screening/supabase.env && eit-api
+```
+
+Sans `--donnees-fictives`, le chargement vers une base qui n'est pas locale est
+refusé : les dossiers réels ne quittent pas la machine.
+
+### Mise en ligne sur Vercel (données fictives seulement)
+
+`vercel.json` déclare un seul projet Vercel à deux services, servis sous la même
+adresse : l'interface (`ui/`, Next.js) et l'API (`src/vercel_app.py`, FastAPI),
+qui reçoit les chemins `/api/*`. L'API n'installe que `src/requirements.txt`
+(environ 70 Mo, sous la limite de 500 Mo d'une fonction Python) ;
+`.vercelignore` garde `data/` et les environnements locaux hors de l'envoi.
+
+Variables d'environnement du projet Vercel, saisies par la personne responsable :
+
+| Variable | Valeur |
+|---|---|
+| `EIT_DATABASE_URL` | Adresse Supabase du pooler en mode **transaction** (port 6543), mot de passe compris |
+| `EIT_ACCESS_CODE` | Code d'accès communiqué aux testeurs ; sans lui, toute personne qui a le lien peut enregistrer des décisions |
+
+Régler la région des fonctions sur Dublin (`dub1`), à côté de la base Supabase
+(`eu-west-1`). Sur Vercel, l'interface appelle l'API en chemin relatif ; en
+local, `NEXT_PUBLIC_API_URL` garde l'adresse `http://127.0.0.1:8000`. Le code
+d'accès est demandé une fois par navigateur ; il ne remplace pas le nom de
+l'évaluateur, qui signe les décisions.
 
 ## Évaluer
 
@@ -368,11 +436,23 @@ questions lues, aucun avertissement. Ce dossier n'est pas dans le dépôt.
 
 ## Hypothèses à confirmer avec MEST
 
-- **Export du test.** Les colonnes de `assessment_results.csv` sont une
-  supposition ; le format réel de l'export ClassMarker reste à obtenir.
+- **Colonnes de l'export groupé.** Le format des valeurs est connu (fiche
+  ClassMarker 2027 observée) ; les noms de colonnes de l'export groupé, non.
+  Ceux de `assessment_results.csv` restent une supposition.
 - **Date limite du test.** Guide 2027 : 20 juillet à 23 h 59 GMT ; l'année
   (2026) et le fuseau des dates de l'export (GMT) sont des hypothèses
-  (`assessment.toml`).
+  (`assessment.toml`). La fiche observée, terminée le 21 juillet à 17 h 52,
+  confirme que la plateforme accepte des soumissions après la date limite.
+- **Durée prévue du test.** Les 70 minutes viennent du test TestGorilla de 2026
+  et ne sont étayées par rien pour ClassMarker ; le seuil « trop rapide » de
+  20 minutes en dépend. Seule durée réelle connue : 38 min 06 s, sur un
+  candidat.
+- **Détection des Concerns.** Huit drapeaux, repris du tableau de bord de revue
+  2027. Le prototype en produit quatre clés : « Assessment not found »,
+  « Assessment concerns », « Assessment submitted after deadline » (contrôles de
+  l'étape 2) et « Generic or potentially AI-generated responses » (modèle, avec
+  citation vérifiée). Les quatre autres sont déclarés `detection = "manuel"` :
+  l'évaluateur les coche lui-même.
 - **Règles du guide 2027 non précisées** (dates du programme, liste des pays
   d'Afrique de l'Est, domaines de la grille) : voir `docs/cadrage.md`.
 - **Fichier manquant.** L'export réel d'une question de fichier sans réponse
