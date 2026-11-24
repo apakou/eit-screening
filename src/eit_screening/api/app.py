@@ -1,25 +1,31 @@
-"""API FastAPI : liste des candidatures, détail d'un dossier, décision de l'évaluateur, journal.
+"""API FastAPI : liste des candidatures, détail d'un dossier, décision de l'évaluateur, journal,
+retours de la session de test.
 
 Le système propose, l'évaluateur tranche. Guide 2027 : une décision prend trois
 valeurs (Interview Invitation, Interview Reject, Waitlist) et un booléen
 distinct, la demande de revue complémentaire. Chaque décision garde les valeurs
 proposées et retenues des deux, avec l'évaluateur, la date et le commentaire.
 Pas d'authentification dans le prototype (Keycloak appartient à l'architecture
-cible) : l'évaluateur est déclaré dans la requête.
+cible) : l'évaluateur est déclaré dans la requête. Une fois l'API en ligne, un
+code d'accès partagé (variable EIT_ACCESS_CODE, en-tête X-Access-Code) garde
+le journal des décisions des visiteurs de passage ; ce n'est pas une identité.
 """
 
 from __future__ import annotations
 
+import os
+import secrets
 from datetime import datetime
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from .db import Candidate, Decision, make_engine, make_sessionmaker, now
+from .db import Candidate, Decision, TourFeedback, make_engine, make_sessionmaker, now
 
 VERDICTS = ("Interview Invitation", "Interview Reject", "Waitlist")
 VerdictLabel = Literal["Interview Invitation", "Interview Reject", "Waitlist"]
@@ -79,6 +85,38 @@ class CandidateDetail(CandidateSummary):
     decisions: list[DecisionOut]
 
 
+class StepResult(BaseModel):
+    step: str = Field(min_length=1, max_length=64)
+    title: str = Field(default="", max_length=200)
+    result: Literal["worked", "failed", "skipped"]
+    note: str = Field(default="", max_length=4000)
+
+    @model_validator(mode="after")
+    def _check(self) -> StepResult:
+        if self.result == "failed" and not self.note.strip():
+            raise ValueError("A step that did not work must say what happened.")
+        return self
+
+
+class FeedbackIn(BaseModel):
+    evaluator: str = Field(min_length=1, max_length=120)
+    steps: list[StepResult] = Field(max_length=100)
+    ease: int | None = Field(default=None, ge=1, le=5)
+    comment: str = Field(default="", max_length=8000)
+
+
+class FeedbackOut(FeedbackIn):
+    id: int
+    created_at: datetime
+
+
+def _feedback_out(row: TourFeedback) -> FeedbackOut:
+    return FeedbackOut(
+        id=row.id, evaluator=row.evaluator, steps=row.steps, ease=row.ease, comment=row.comment,
+        created_at=row.created_at,
+    )
+
+
 def _decision_out(row: Decision) -> DecisionOut:
     return DecisionOut(
         id=row.id, pseudonym=row.pseudonym, evaluator=row.evaluator, action=row.action, proposed=row.proposed,
@@ -101,15 +139,43 @@ def _summary(candidate: Candidate, last: Decision | None) -> dict:
     )
 
 
-def create_app(database_url: str | None = None, allowed_origins: list[str] | None = None) -> FastAPI:
+LOCAL_ORIGINS = ["http://localhost:3100", "http://127.0.0.1:3100"]
+OPEN_PATHS = {"/api/health"}
+
+
+def _origins_from_env() -> list[str]:
+    extra = [o.strip() for o in os.environ.get("EIT_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+    return LOCAL_ORIGINS + extra
+
+
+def create_app(
+    database_url: str | None = None,
+    allowed_origins: list[str] | None = None,
+    access_code: str | None = None,
+) -> FastAPI:
+    """``access_code`` (défaut : EIT_ACCESS_CODE) : exigé sur toutes les routes /api sauf /api/health."""
     engine = make_engine(database_url)
     sessions: sessionmaker[Session] = make_sessionmaker(engine)
+    code = access_code if access_code is not None else os.environ.get("EIT_ACCESS_CODE", "")
     app = FastAPI(title="eit-screening", description="Proposed decisions and evaluator decisions (MEST pre-screening).")
+
+    @app.middleware("http")
+    async def check_access_code(request: Request, call_next):
+        path = request.url.path
+        if code and request.method != "OPTIONS" and path.startswith("/api/") and path not in OPEN_PATHS:
+            given = request.headers.get("X-Access-Code", "")
+            if not given:
+                return JSONResponse({"detail": "Access code required."}, status_code=401)
+            if not secrets.compare_digest(given.encode(), code.encode()):
+                return JSONResponse({"detail": "Wrong access code."}, status_code=401)
+        return await call_next(request)
+
+    # Ajouté après le contrôle du code, donc exécuté avant : les refus 401 portent aussi les en-têtes CORS.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins or ["http://localhost:3100", "http://127.0.0.1:3100"],
+        allow_origins=allowed_origins or _origins_from_env(),
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "X-Access-Code"],
     )
     app.state.sessions = sessions
 
@@ -126,6 +192,11 @@ def create_app(database_url: str | None = None, allowed_origins: list[str] | Non
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/api/access")
+    def access() -> dict:
+        """Répond 200 si le code d'accès envoyé est bon (ou si aucun code n'est exigé)."""
+        return {"status": "ok", "code_required": bool(code)}
 
     @app.get("/api/candidates", response_model=list[CandidateSummary])
     def candidates(
@@ -192,6 +263,22 @@ def create_app(database_url: str | None = None, allowed_origins: list[str] | Non
         if pseudonym:
             query = query.where(Decision.pseudonym == pseudonym)
         return [_decision_out(d) for d in db.scalars(query)]
+
+    @app.post("/api/feedback", response_model=FeedbackOut, status_code=201)
+    def add_feedback(body: FeedbackIn, db: Session = Depends(session)):
+        if not body.evaluator.strip():
+            raise HTTPException(422, "Enter your name before sending feedback.")
+        row = TourFeedback(
+            evaluator=body.evaluator.strip(), steps=[s.model_dump() for s in body.steps], ease=body.ease,
+            comment=body.comment.strip(), created_at=now(),
+        )
+        db.add(row)
+        db.commit()
+        return _feedback_out(row)
+
+    @app.get("/api/feedback", response_model=list[FeedbackOut])
+    def feedback(db: Session = Depends(session)):
+        return [_feedback_out(r) for r in db.scalars(select(TourFeedback).order_by(TourFeedback.created_at, TourFeedback.id))]
 
     return app
 

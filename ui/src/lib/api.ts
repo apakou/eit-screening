@@ -1,6 +1,13 @@
 // Accès à l'API FastAPI (eit-api). Adresse réglable par NEXT_PUBLIC_API_URL.
+// Sur Vercel, l'interface et l'API partagent la même adresse (vercel.json) : chemins relatifs.
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+import { readAccessCode } from "@/lib/access";
+
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? (process.env.NEXT_PUBLIC_VERCEL_ENV ? "" : "http://127.0.0.1:8000");
+
+/** Refus du code d'accès (HTTP 401) : l'interface redemande le code. */
+export class AccessCodeError extends Error {}
 
 // Guide d'évaluation 2027 : trois décisions, et un booléen distinct de revue complémentaire.
 export const VERDICTS = ["Interview Invitation", "Waitlist", "Interview Reject"] as const;
@@ -108,11 +115,16 @@ export interface CandidateDetail extends CandidateSummary {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const code = readAccessCode();
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...(code ? { "X-Access-Code": code } : {}), ...(init?.headers ?? {}) },
     cache: "no-store",
   });
+  if (response.status === 401) {
+    window.dispatchEvent(new Event(ACCESS_DENIED_EVENT));
+    throw new AccessCodeError("Access code required.");
+  }
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
     try {
@@ -125,6 +137,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return response.json() as Promise<T>;
 }
+
+export const ACCESS_DENIED_EVENT = "code-acces-refuse";
+
+/** 200 si le code est bon ou si l'API n'en exige pas ; AccessCodeError sinon. */
+export const checkAccess = () => request<{ status: string; code_required: boolean }>("/api/access");
 
 export const listCandidates = () => request<CandidateSummary[]>("/api/candidates");
 export const getCandidate = (pseudonym: string) =>
@@ -193,3 +210,27 @@ export function displayText(text: string): string {
     person ? `[PERSON_${n}]` : `[${PLACEHOLDERS[word] ?? word}]`,
   );
 }
+
+// Retours de la session de test (visite guidée).
+export type StepOutcome = "worked" | "failed" | "skipped";
+
+export interface StepResult {
+  step: string;
+  title: string;
+  result: StepOutcome;
+  note: string;
+}
+
+export interface Feedback {
+  id: number;
+  evaluator: string;
+  steps: StepResult[];
+  ease: number | null;
+  comment: string;
+  created_at: string;
+}
+
+export const postFeedback = (body: { evaluator: string; steps: StepResult[]; ease: number | null; comment: string }) =>
+  request<Feedback>("/api/feedback", { method: "POST", body: JSON.stringify(body) });
+
+export const listFeedback = () => request<Feedback[]>("/api/feedback");

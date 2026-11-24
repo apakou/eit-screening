@@ -1,0 +1,9 @@
+# Dépendances de l'API seule, pour le service « api » de Vercel (vercel.json).
+# L'installation complète du projet (PyTorch, Docling, Whisper…) dépasse la
+# limite de 500 Mo d'une fonction Python : elle reste dans pyproject.toml.
+# Versions alignées sur l'environnement de développement.
+fastapi==0.165.0
+starlette==1.10.0
+pydantic==2.14.4
+SQLAlchemy==2.1.9
+psycopg[binary]==3.3.9

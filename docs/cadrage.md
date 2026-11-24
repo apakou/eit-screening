@@ -67,6 +67,16 @@ Le code doit donc produire ses premiers chiffres avant le 6 décembre.
   déduire la nationalité. Les noms d'établissements et d'employeurs sont gardés
   pour le critère CV ; ils laissent parfois deviner le pays, et ce biais résiduel
   sera mesuré par un test contrefactuel.
+- **Base hébergée Supabase, données fictives seulement** (24 novembre 2026).
+  Un projet Supabase (PostgreSQL, région Europe, offre gratuite) peut remplacer
+  la base Docker locale pour les sessions de test avec l'équipe de recrutement.
+  Il ne reçoit que la cohorte fictive, les décisions prises dessus et les retours
+  de la visite guidée. Les dossiers réels restent en local : `eit-api-load`
+  refuse une base qui n'est pas locale sans l'option `--donnees-fictives`.
+- **Mise en ligne sur Vercel, offre gratuite** (24 novembre 2026). Interface et
+  API dans un même projet (Vercel Services), base Supabase, données fictives
+  seulement. Un code d'accès partagé protège le journal des décisions, qui sert
+  à la mesure d'alignement ; ce n'est pas une authentification.
 - **Honnêteté du mémoire.** Le texte distingue ce qui est construit et mesuré de
   ce qui est seulement conçu.
 

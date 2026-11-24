@@ -36,7 +36,7 @@ conservées.
 | `src/eit_screening/grille.toml`, `grid.py` | Critères provisoires (mémoire) ; les 8 Concerns sont ceux du tableau de bord 2027 |
 | `src/eit_screening/verdict/` | Écrit et testé (faux serveur) ; aucun verdict produit sur la cohorte 2027. Décision à trois valeurs + revue complémentaire ; paramètres dans `verdict.toml` |
 | `src/eit_screening/api/` | Écrit et testé (SQLite) ; jamais lancé contre PostgreSQL avec de vrais verdicts |
-| `ui/` | Fait, en anglais. Vérifié dans le navigateur avec les 40 verdicts ; formulaire de décision jamais soumis |
+| `ui/` | Fait, en anglais. Vérifié dans le navigateur avec les 40 verdicts ; formulaire de décision jamais soumis. Visite guidée de la session de test (« Test session » dans la barre latérale), retours enregistrés dans la table `tour_feedback` (`/api/feedback`) ; envoi jamais fait depuis l'interface |
 | `src/eit_screening/evaluation/` | Écrit et testé (outils) ; `eit-evaluate` et `eit-counterfactual` jamais exécutés |
 
 Le détail des étapes et leurs critères d'acceptation sont dans

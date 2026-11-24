@@ -310,6 +310,51 @@ comme les messages de l'API et les textes affichés : elle s'adresse aux
   anonymisé à droite, citations vérifiées surlignées ; boutons pour valider ou
   modifier, et historique des décisions.
 
+Le bouton **Test session** de la barre latérale ouvre une visite guidée de la
+session de test : à chaque étape, l'évaluateur fait l'action décrite et dit si
+le résultat attendu s'est produit. À la fin, ses réponses et son avis sont
+enregistrés dans la table `tour_feedback` (`GET /api/feedback` pour les lire).
+
+### Base hébergée (Supabase), données fictives seulement
+
+L'adresse de la base se règle par `EIT_DATABASE_URL` ; le format donné par
+Supabase (`postgresql://…`) est accepté tel quel. Garder cette adresse, qui
+contient le mot de passe, hors du dépôt, par exemple dans
+`~/.config/eit-screening/supabase.env` :
+
+```bash
+export EIT_DATABASE_URL='postgresql://postgres.<projet>:<mot de passe>@<hôte du pooler>:5432/postgres'
+```
+
+```bash
+. ~/.config/eit-screening/supabase.env && eit-api-load --donnees-fictives
+. ~/.config/eit-screening/supabase.env && eit-api
+```
+
+Sans `--donnees-fictives`, le chargement vers une base qui n'est pas locale est
+refusé : les dossiers réels ne quittent pas la machine.
+
+### Mise en ligne sur Vercel (données fictives seulement)
+
+`vercel.json` déclare un seul projet Vercel à deux services, servis sous la même
+adresse : l'interface (`ui/`, Next.js) et l'API (`src/vercel_app.py`, FastAPI),
+qui reçoit les chemins `/api/*`. L'API n'installe que `src/requirements.txt`
+(environ 70 Mo, sous la limite de 500 Mo d'une fonction Python) ;
+`.vercelignore` garde `data/` et les environnements locaux hors de l'envoi.
+
+Variables d'environnement du projet Vercel, saisies par la personne responsable :
+
+| Variable | Valeur |
+|---|---|
+| `EIT_DATABASE_URL` | Adresse Supabase du pooler en mode **transaction** (port 6543), mot de passe compris |
+| `EIT_ACCESS_CODE` | Code d'accès communiqué aux testeurs ; sans lui, toute personne qui a le lien peut enregistrer des décisions |
+
+Régler la région des fonctions sur Dublin (`dub1`), à côté de la base Supabase
+(`eu-west-1`). Sur Vercel, l'interface appelle l'API en chemin relatif ; en
+local, `NEXT_PUBLIC_API_URL` garde l'adresse `http://127.0.0.1:8000`. Le code
+d'accès est demandé une fois par navigateur ; il ne remplace pas le nom de
+l'évaluateur, qui signe les décisions.
+
 ## Évaluer
 
 ```bash

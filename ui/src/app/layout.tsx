@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 
+import { AccessGate } from "@/components/access-gate";
 import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
@@ -32,7 +33,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${bricolage.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-paper text-ink">
-        <AppShell>{children}</AppShell>
+        <AccessGate>
+          <AppShell>{children}</AppShell>
+        </AccessGate>
       </body>
     </html>
   );

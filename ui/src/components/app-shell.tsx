@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { TestTour, TourLauncher } from "@/components/test-tour";
 import { setEvaluator, useEvaluator } from "@/lib/evaluator";
 
 const NAV = [
@@ -107,10 +108,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="block text-xs text-muted-foreground">AI Startup Program, class of 2027</span>
             </span>
           </Link>
-          <Suspense fallback={<NavLinks pathname="" />}>
-            <ActiveNav />
-          </Suspense>
-          <div className="mt-auto hidden space-y-3 lg:block">
+          <div className="space-y-1">
+            <Suspense fallback={<NavLinks pathname="" />}>
+              <ActiveNav />
+            </Suspense>
+            <TourLauncher />
+          </div>
+          <div className="mt-auto hidden space-y-3 lg:block" data-tour="evaluator">
             <EvaluatorField />
             <p className="px-1 text-xs leading-relaxed text-muted-foreground">
               The system proposes; you decide. Each decision keeps the proposal and your choice.
@@ -119,11 +123,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <main className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-8 lg:py-8">
-        <div className="mb-6 lg:hidden">
+        <div className="mb-6 lg:hidden" data-tour="evaluator">
           <EvaluatorField />
         </div>
         {children}
       </main>
+      {/* La visite lit l'adresse courante : frontière <Suspense> exigée par Next.js 16. */}
+      <Suspense fallback={null}>
+        <TestTour />
+      </Suspense>
     </div>
   );
 }

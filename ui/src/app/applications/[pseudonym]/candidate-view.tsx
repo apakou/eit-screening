@@ -347,7 +347,7 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
         <section aria-label="Proposal and reasons" className="space-y-4">
-          <article className={`rounded-[1.75rem] p-5 ${tone ? `${tone.bg} ${tone.ink}` : "bg-white"}`}>
+          <article data-tour="proposal" className={`rounded-[1.75rem] p-5 ${tone ? `${tone.bg} ${tone.ink}` : "bg-white"}`}>
             <p className="text-sm">Proposed decision</p>
             <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
               <h2 className="text-3xl font-semibold">{v.proposed ?? "No proposal"}</h2>
@@ -374,7 +374,7 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
           </article>
 
           {attention > 0 && (
-            <article className="rounded-2xl bg-white p-4">
+            <article data-tour="to-check" className="rounded-2xl bg-white p-4">
               <h3 className="text-base font-semibold">To check</h3>
               <ul className="mt-3 space-y-2">
                 {v.findings.map((f, i) => (
@@ -402,13 +402,13 @@ export function CandidateView({ pseudonym }: { pseudonym: string }) {
             </article>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-3" data-tour="criteria">
             {v.criteria.map((c) => (
               <CriterionCard key={c.key} c={c} active={active === c.key} onShow={() => show(c.key)} />
             ))}
           </div>
 
-          <article className="rounded-2xl bg-white p-5">
+          <article data-tour="decision-form" className="rounded-2xl bg-white p-5">
             <h3 className="text-base font-semibold">Your decision</h3>
             {data.retained && (
               <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">

@@ -18,7 +18,7 @@ function SessionBanner({ rows }: { rows: CandidateSummary[] }) {
   const next = [...pending].sort((a, b) => a.pseudonym.localeCompare(b.pseudonym))[0];
   const share = rows.length ? decided / rows.length : 0;
   return (
-    <section aria-label="Review progress" className="rounded-[1.75rem] bg-white p-6 lg:p-8">
+    <section aria-label="Review progress" data-tour="progress" className="rounded-[1.75rem] bg-white p-6 lg:p-8">
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div className="max-w-xl">
           <h1 className="text-3xl font-semibold lg:text-4xl">
@@ -36,6 +36,7 @@ function SessionBanner({ rows }: { rows: CandidateSummary[] }) {
         {next ? (
           <Link
             href={`/applications/${next.pseudonym}`}
+            data-tour="start-reviewing"
             className="inline-flex h-11 items-center rounded-xl bg-ink px-5 text-sm font-medium text-white hover:bg-black"
           >
             {decided === 0 ? "Start reviewing" : "Continue reviewing"}
@@ -74,7 +75,7 @@ function DecisionCards({
   const card = "rounded-2xl p-4 text-left transition-shadow hover:shadow-[0_0_0_2px_var(--ink)] aria-pressed:shadow-[0_0_0_2px_var(--ink)]";
   const reviewCount = rows.filter((r) => r.request_further_review).length;
   return (
-    <section aria-label="Proposed decisions" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <section aria-label="Proposed decisions" data-tour="decision-cards" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {VERDICTS.map((v) => {
         const style = DECISION_STYLE[v];
         const count = rows.filter((r) => r.proposed === v).length;
@@ -215,7 +216,7 @@ export default function CandidatesPage() {
       <DecisionCards rows={rows} verdict={verdict} review={review} onVerdict={setVerdict} onReview={setReview} />
 
       <section aria-label="Applications" className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3" data-tour="list-tools">
           <div role="tablist" aria-label="Status" className="inline-flex rounded-xl bg-[#efe8dc] p-1">
             {scopes.map(([key, label]) => (
               <button

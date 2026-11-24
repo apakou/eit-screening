@@ -1,0 +1,17 @@
+# Ce qui ne part jamais vers Vercel, même avec « vercel deploy » depuis cette machine.
+# Dossiers de candidature, réels ou fictifs, résultats et archives.
+data/
+# Environnements, caches et constructions locales.
+.venv/
+.claude/
+**/__pycache__/
+*.egg-info/
+.pytest_cache/
+ui/node_modules/
+ui/.next/
+ui/tsconfig.tsbuildinfo
+# Inutile à l'exécution.
+tests/
+docs/
+.vercel/
+.env*

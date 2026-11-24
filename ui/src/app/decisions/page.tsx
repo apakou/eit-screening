@@ -33,7 +33,7 @@ export default function JournalPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
+      <header className="space-y-2" data-tour="decision-log">
         <h1 className="text-3xl font-semibold">Decision log</h1>
         <p className="max-w-2xl text-muted-foreground">
           Each entry keeps the system&apos;s proposal and the decision retained. The log is never rewritten: a new
