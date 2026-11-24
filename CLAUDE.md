@@ -35,7 +35,7 @@ conservées.
 | `src/eit_screening/search/retrieve.py` | Construit et mesuré, critère non atteint ; chaîne par défaut : dense (voir feuille de route, étape 6) |
 | `src/eit_screening/grille.toml`, `grid.py` | Critères provisoires (mémoire) ; les 8 Concerns sont ceux du tableau de bord 2027 |
 | `src/eit_screening/verdict/` | Écrit et testé (faux serveur) ; aucun verdict produit sur la cohorte 2027. Décision à trois valeurs + revue complémentaire ; paramètres dans `verdict.toml` |
-| `src/eit_screening/api/` | Écrit et testé (SQLite) ; jamais lancé contre PostgreSQL avec de vrais verdicts |
+| `src/eit_screening/api/` | Écrit et testé (SQLite). En ligne depuis le 24 novembre 2026 : https://eit-screening.vercel.app (Vercel, fonctions à Dublin) sur une base Supabase (Irlande) chargée des 40 dossiers fictifs, protégée par un code d'accès (`EIT_ACCESS_CODE`). Jamais lancée avec des dossiers réels |
 | `ui/` | Fait, en anglais. Vérifié dans le navigateur avec les 40 verdicts ; formulaire de décision jamais soumis. Visite guidée de la session de test (« Test session » dans la barre latérale), retours enregistrés dans la table `tour_feedback` (`/api/feedback`) ; envoi jamais fait depuis l'interface |
 | `src/eit_screening/evaluation/` | Écrit et testé (outils) ; `eit-evaluate` et `eit-counterfactual` jamais exécutés |
 
@@ -63,6 +63,8 @@ eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/
 eit-verdict data/anonymises --qdrant-url http://127.0.0.1:6333 --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json --dossier-entier -o data/verdicts-dossier-entier
 eit-verdict-recalcul --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json   # constats et décisions recalculés, sans le modèle
 docker compose up -d postgres && eit-api-load && eit-api                   # API sur http://127.0.0.1:8000
+. ~/.config/eit-screening/supabase.env && eit-api-load --donnees-fictives    # charge la base Supabase (données fictives seulement)
+. ~/.config/eit-screening/supabase.env && eit-api                          # API locale sur la base Supabase
 cd ui && pnpm install && pnpm dev --port 3100                                 # interface
 eit-evaluate --table ~/.local/share/eit-screening/pseudonymes-fictifs-2027.json   # export unique des mesures
 ```
@@ -83,6 +85,10 @@ tueur de processus du noyau, qui a fermé l'application Claude.
 - Seul du texte **anonymisé** peut partir vers un modèle de langage hébergé.
   Tout le reste (lecture des PDF, transcription, embeddings, recherche) tourne
   en local.
+- Supabase et Vercel (plateforme en ligne) ne reçoivent que des **données
+  fictives**. `eit-api-load` refuse une base qui n'est pas locale sans
+  `--donnees-fictives`. L'adresse de la base (mot de passe compris) reste dans
+  `~/.config/eit-screening/supabase.env`, hors du dépôt.
 - Le genre, l'âge et la nationalité servent aux contrôles d'éligibilité et aux
   filtres, jamais au texte envoyé au modèle de langage. Pour la même raison, les
   pays, villes, nationalités et langues locales sont masqués dans ce texte

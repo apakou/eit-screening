@@ -355,6 +355,37 @@ local, `NEXT_PUBLIC_API_URL` garde l'adresse `http://127.0.0.1:8000`. Le code
 d'accès est demandé une fois par navigateur ; il ne remplace pas le nom de
 l'évaluateur, qui signe les décisions.
 
+### Plateforme en ligne
+
+Mise en ligne le 24 novembre 2026, pour les sessions de test avec l'équipe de
+recrutement de MEST :
+
+| | |
+|---|---|
+| Adresse | https://eit-screening.vercel.app |
+| Hébergement | Vercel, offre gratuite (Hobby) ; fonctions de l'API à Dublin (`dub1`) |
+| Base | Supabase, projet `eit-screening`, région `eu-west-1` (Irlande), offre gratuite |
+| Données | Les 40 dossiers fictifs de la cohorte 2027 (`eit-api-load --donnees-fictives`) |
+| Déploiement | Automatique à chaque push sur `main`, branche par défaut du dépôt |
+
+Les adresses propres à chaque déploiement (`eit-screening-<id>-….vercel.app`)
+sont protégées par la connexion Vercel ; les testeurs n'utilisent que l'adresse
+principale et le code d'accès.
+
+Pour travailler en local sur la même base, lancer l'API avec l'adresse du pooler
+en mode session (port 5432), gardée hors du dépôt :
+
+```bash
+. ~/.config/eit-screening/supabase.env && eit-api
+```
+
+Les décisions et les retours de la visite guidée enregistrés en ligne restent
+dans Supabase : les lire dans l'éditeur de tables de Supabase, ou par
+`GET /api/feedback` avec l'en-tête `X-Access-Code`. Les décisions prises pendant
+une session de test comptent dans le chiffre d'alignement du journal ; décider
+avant les sessions mesurées du mémoire s'il faut les garder ou repartir d'une
+base vide (aucune commande ne vide le journal pour l'instant).
+
 ## Évaluer
 
 ```bash
