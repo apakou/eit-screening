@@ -6,7 +6,7 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000
 export const VERDICTS = ["Interview Invitation", "Waitlist", "Interview Reject"] as const;
 export type VerdictLabel = (typeof VERDICTS)[number];
 
-export type Status = "à traiter" | "validé" | "modifié";
+export type Status = "pending" | "validated" | "modified";
 
 export interface CandidateSummary {
   pseudonym: string;
@@ -114,7 +114,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     cache: "no-store",
   });
   if (!response.ok) {
-    let detail = `${response.status}`;
+    let detail = `HTTP ${response.status}`;
     try {
       const body = await response.json();
       detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
@@ -144,12 +144,52 @@ export const postDecision = (
     body: JSON.stringify(body),
   });
 
+export const listDecisions = () => request<Decision[]>("/api/decisions");
+
 export const SECTION_LABELS: Record<string, string> = {
-  essay: "Réponse libre",
-  personal_statement: "Vidéo de présentation",
-  assessment_reflection: "Vidéo de réflexion",
-  attachment: "Pièce jointe",
-  education: "Formation",
-  experience: "Expérience",
-  uploads: "Fichiers envoyés",
+  essay: "Written answer",
+  personal_statement: "Personal statement video",
+  assessment_reflection: "Assessment reflection video",
+  attachment: "Attachment",
+  education: "Education",
+  experience: "Work experience",
+  uploads: "Uploaded files",
 };
+
+// Codes techniques qui pourraient rester dans un ancien verdict, en langage d'évaluateur.
+export const CODE_LABELS: Record<string, string> = {
+  age_out_of_range: "age outside the eligible range",
+  age_borderline: "age at the limit",
+  citizenship_outside_region: "citizenship outside the eligible region",
+  graduation_after_cutoff: "graduation in 2028 or later",
+  graduation_review: "graduation in 2027",
+  assessment_not_found: "assessment not found",
+  assessment_late: "assessment submitted after the deadline",
+  assessment_too_fast: "assessment completed unusually fast",
+  generic_ai_responses: "generic responses",
+};
+
+/** Remplace d'éventuels codes techniques par leur libellé (les nouveaux verdicts n'en contiennent plus). */
+export function humanize(text: string): string {
+  return text.replace(/[a-z]+(?:_[a-z0-9]+)+/g, (code) => CODE_LABELS[code] ?? code);
+}
+
+// Marques d'anonymisation des données (en français) et leur affichage aux évaluateurs.
+const PLACEHOLDERS: Record<string, string> = {
+  CANDIDAT: "APPLICANT",
+  PAYS: "COUNTRY",
+  VILLE: "CITY",
+  "NATIONALITÉ": "NATIONALITY",
+  LANGUE: "LANGUAGE",
+  LIEU: "PLACE",
+  "TÉLÉPHONE": "PHONE",
+  LIEN: "LINK",
+  EMAIL: "EMAIL",
+};
+
+/** Texte affiché : marques d'anonymisation en anglais (« [PAYS] » devient « [COUNTRY] »). */
+export function displayText(text: string): string {
+  return text.replace(/\[(PERSONNE)_(\d+)\]|\[([A-ZÉ]+)\]/g, (match, person, n, word) =>
+    person ? `[PERSON_${n}]` : `[${PLACEHOLDERS[word] ?? word}]`,
+  );
+}

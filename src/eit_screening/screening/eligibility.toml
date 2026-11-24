@@ -21,7 +21,8 @@ reference_date = 2027-01-01
 # program_end = 2027-12-31
 
 [citizenship]
-zone_name = "Afrique de l'Ouest ou de l'Est"
+# Nom de la zone dans les messages affichés aux évaluateurs (en anglais).
+zone_name = "West or East Africa"
 # Guide 2027 : citoyenneté d'un pays d'Afrique de l'Ouest OU de l'Est.
 # HYPOTHÈSE sur la liste : classification géographique de l'ONU (M49), comme
 # pour l'Afrique de l'Ouest. Elle diffère de la Communauté d'Afrique de l'Est

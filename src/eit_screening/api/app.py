@@ -36,9 +36,9 @@ class DecisionIn(BaseModel):
     def _check(self) -> DecisionIn:
         if self.action == "modify":
             if self.retained is None:
-                raise ValueError("Une modification doit donner la décision retenue.")
+                raise ValueError("A modification must give the decision retained.")
             if not self.comment.strip():
-                raise ValueError("Une modification doit être expliquée par un commentaire.")
+                raise ValueError("A modification must be explained in a comment.")
         return self
 
 
@@ -68,7 +68,7 @@ class CandidateSummary(BaseModel):
     gender: str | None = None
     age: int | None = None
     citizenship: str | None = None
-    status: Literal["à traiter", "validé", "modifié"]
+    status: Literal["pending", "validated", "modified"]
     retained: str | None = None
     retained_review: bool | None = None
 
@@ -95,7 +95,7 @@ def _summary(candidate: Candidate, last: Decision | None) -> dict:
         max_total=candidate.max_total, alerts=candidate.alerts, concerns=candidate.concerns,
         quotes_verified=candidate.quotes_verified, quotes_total=candidate.quotes_total,
         gender=meta.get("gender"), age=meta.get("age"), citizenship=meta.get("citizenship"),
-        status="à traiter" if last is None else ("validé" if last.action == "validate" else "modifié"),
+        status="pending" if last is None else ("validated" if last.action == "validate" else "modified"),
         retained=None if last is None else last.retained,
         retained_review=None if last is None else last.retained_review,
     )
@@ -104,7 +104,7 @@ def _summary(candidate: Candidate, last: Decision | None) -> dict:
 def create_app(database_url: str | None = None, allowed_origins: list[str] | None = None) -> FastAPI:
     engine = make_engine(database_url)
     sessions: sessionmaker[Session] = make_sessionmaker(engine)
-    app = FastAPI(title="eit-screening", description="Verdicts proposés et décisions des évaluateurs.")
+    app = FastAPI(title="eit-screening", description="Proposed decisions and evaluator decisions (MEST pre-screening).")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins or ["http://localhost:3100", "http://127.0.0.1:3100"],
@@ -131,7 +131,7 @@ def create_app(database_url: str | None = None, allowed_origins: list[str] | Non
     def candidates(
         verdict: VerdictLabel | None = None,
         review: bool | None = None,
-        status: Literal["à traiter", "validé", "modifié"] | None = None,
+        status: Literal["pending", "validated", "modified"] | None = None,
         sort: Literal["pseudonym", "total", "alerts"] = "pseudonym",
         order: Literal["asc", "desc"] = "asc",
         db: Session = Depends(session),
@@ -152,7 +152,7 @@ def create_app(database_url: str | None = None, allowed_origins: list[str] | Non
     def candidate(pseudonym: str, db: Session = Depends(session)):
         row = db.get(Candidate, pseudonym)
         if row is None:
-            raise HTTPException(404, "Candidature inconnue.")
+            raise HTTPException(404, "Unknown application.")
         history = list(db.scalars(
             select(Decision).where(Decision.pseudonym == pseudonym).order_by(Decision.created_at, Decision.id)
         ))
@@ -167,16 +167,16 @@ def create_app(database_url: str | None = None, allowed_origins: list[str] | Non
     def decide(pseudonym: str, body: DecisionIn, db: Session = Depends(session)):
         row = db.get(Candidate, pseudonym)
         if row is None:
-            raise HTTPException(404, "Candidature inconnue.")
+            raise HTTPException(404, "Unknown application.")
         if body.action == "validate":
             if row.proposed is None:
-                raise HTTPException(422, "Aucune décision proposée : utiliser « modifier » pour en choisir une.")
+                raise HTTPException(422, "No decision was proposed: use “modify” to choose one.")
             retained, review = row.proposed, row.request_further_review
         else:
             retained = body.retained
             review = row.request_further_review if body.request_further_review is None else body.request_further_review
             if retained == row.proposed and review == row.request_further_review:
-                raise HTTPException(422, "Décision et revue identiques à la proposition : utiliser « valider ».")
+                raise HTTPException(422, "Same decision and review flag as proposed: use “validate” instead.")
         decision = Decision(
             pseudonym=pseudonym, evaluator=body.evaluator.strip(), action=body.action, proposed=row.proposed,
             retained=retained, proposed_review=row.request_further_review, retained_review=review,

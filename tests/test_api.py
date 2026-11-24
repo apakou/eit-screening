@@ -48,7 +48,7 @@ def client(tmp_path):
 def test_list_sort_and_filter(client):
     rows = client.get("/api/candidates", params={"sort": "total", "order": "desc"}).json()
     assert [r["pseudonym"] for r in rows] == ["C-0000000C", "C-0000000A", "C-0000000B", "C-0000000D"]
-    assert rows[0]["alerts"] == 1 and rows[0]["age"] == 36 and rows[0]["status"] == "à traiter"
+    assert rows[0]["alerts"] == 1 and rows[0]["age"] == 36 and rows[0]["status"] == "pending"
     only = client.get("/api/candidates", params={"verdict": "Waitlist"}).json()
     assert [r["pseudonym"] for r in only] == ["C-0000000B"]
     review = client.get("/api/candidates", params={"review": True}).json()
@@ -71,7 +71,7 @@ def test_validate_keeps_both_verdicts(client):
     assert decision["proposed"] == decision["retained"] == "Interview Invitation"
     assert decision["proposed_review"] is decision["retained_review"] is False
     rows = {r["pseudonym"]: r for r in client.get("/api/candidates").json()}
-    assert rows["C-0000000A"]["status"] == "validé"
+    assert rows["C-0000000A"]["status"] == "validated"
 
 
 def test_modify_needs_a_verdict_and_a_comment(client):
@@ -113,7 +113,7 @@ def test_journal_keeps_every_decision(client):
         ("E1", "Interview Reject", True), ("E2", "Waitlist", False),
     ]
     detail = client.get("/api/candidates/C-0000000C").json()
-    assert detail["status"] == "modifié" and detail["retained"] == "Waitlist" and detail["retained_review"] is False
+    assert detail["status"] == "modified" and detail["retained"] == "Waitlist" and detail["retained_review"] is False
     assert len(detail["decisions"]) == 2
 
 

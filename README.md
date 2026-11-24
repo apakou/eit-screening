@@ -278,6 +278,11 @@ nationalité, ni numéro de candidature.
 `--dossier-entier` lance la variante de comparaison sans recherche (tout le
 dossier dans le prompt).
 
+`eit-verdict-recalcul` recalcule les constats, les Concerns relevés par les
+contrôles et la décision proposée à partir des verdicts existants, sans rappeler
+le modèle : utile après un changement des contrôles, de la règle de décision ou
+des textes affichés.
+
 ## API et interface
 
 ```bash
@@ -294,7 +299,10 @@ l'évaluateur, la date, la décision et la demande de revue proposées et retenu
 n'est jamais réécrit. Pas d'authentification dans le prototype : l'évaluateur
 saisit son nom.
 
-L'interface (Next.js, TypeScript, Tailwind CSS, shadcn/ui) a deux écrans :
+L'interface (Next.js, TypeScript, Tailwind CSS, shadcn/ui) est en anglais,
+comme les messages de l'API et les textes affichés : elle s'adresse aux
+évaluateurs de MEST. Elle a deux écrans, plus le journal des décisions
+(`/decisions`) :
 
 - **tableau des candidatures**, triable (total, alertes, Concerns, âge) et
   filtrable (verdict, statut, genre) ;

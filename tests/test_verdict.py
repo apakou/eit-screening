@@ -124,7 +124,7 @@ def test_invented_quote_is_flagged_and_blocks_the_proposal():
     assert not any(c.quote_verified for c in verdict.criteria)
     # La décision suit les notes, mais la revue complémentaire est demandée.
     assert verdict.proposed == "Interview Invitation" and verdict.request_further_review
-    assert any("introuvable" in r for r in verdict.review_reasons)
+    assert any("not found word for word" in r for r in verdict.review_reasons)
 
 
 def test_scores_are_clamped_to_the_grid():
@@ -145,7 +145,7 @@ def test_findings_from_earlier_steps():
     client, _ = _client(_answer())
     verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG, findings=[late])
     assert verdict.proposed == "Interview Invitation" and verdict.request_further_review
-    assert any("assessment_late" in r for r in verdict.review_reasons)
+    assert any("assessment submitted after the deadline" in r for r in verdict.review_reasons)
     assert [c.key for c in verdict.concerns] == ["assessment_late_submission"]
 
 
@@ -154,7 +154,7 @@ def test_guide_exclusions_propose_a_reject(code):
     excluded = Finding(code=code, severity="alert", message="Écarté par le guide.")
     client, _ = _client(_answer())
     verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG, findings=[excluded])
-    assert verdict.proposed == "Interview Reject" and code in verdict.rule
+    assert verdict.proposed == "Interview Reject" and verdict.rule.startswith("Excluded by the evaluation guide")
     assert verdict.total == 30  # les notes restent affichées
 
 
@@ -260,3 +260,16 @@ def test_no_concern_is_detected_unless_the_grid_says_so():
     produced = set(ASSESSMENT_CONCERNS.values()) | {"generic_ai_responses"}
     assert produced == declared
     assert {c.key for c in grid.concerns} >= produced
+
+
+def test_redecide_keeps_the_model_output_and_recomputes_the_rest():
+    from eit_screening.verdict.redecide import redecide
+
+    client, _ = _client(_answer(generic=True))
+    verdict, _, _ = propose(DOSSIER, EVIDENCE, GRID, client, CONFIG)
+    excluded = Finding(code="graduation_after_cutoff", severity="alert", message="Graduation in Jun 2028.")
+    again = redecide(verdict, [excluded], GRID, CONFIG)
+    assert again.criteria == verdict.criteria and again.total == verdict.total
+    assert [c.key for c in again.concerns] == ["generic_ai_responses"]  # Concern du modèle gardé
+    assert again.proposed == "Interview Reject" and again.findings == [excluded]
+    assert again.rule == "Excluded by the evaluation guide: graduation in 2028 or later."

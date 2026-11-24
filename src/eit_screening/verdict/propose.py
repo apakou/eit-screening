@@ -190,6 +190,32 @@ def concerns_from_findings(findings: list[Finding], grid: Grid) -> list[ConcernR
     return result
 
 
+# Libellés des constats dans les textes affichés aux évaluateurs (en anglais).
+FINDING_LABELS: dict[str, str] = {
+    "age_out_of_range": "age outside the eligible range",
+    "age_borderline": "age at the limit",
+    "age_unknown": "date of birth unreadable",
+    "citizenship_outside_region": "citizenship outside the eligible region",
+    "citizenship_unknown": "citizenship unreadable",
+    "graduation_after_cutoff": "graduation in 2028 or later",
+    "graduation_review": "graduation in 2027",
+    "eligibility_answer_no": "“No” to an eligibility question",
+    "eligibility_answer_unreadable": "unreadable eligibility answer",
+    "eligibility_answers_missing": "eligibility answers missing",
+    "assessment_not_found": "assessment not found",
+    "assessment_late": "assessment submitted after the deadline",
+    "assessment_too_fast": "assessment completed unusually fast",
+    "assessment_multiple_results": "several assessment results",
+    "assessment_match_ambiguous": "ambiguous assessment result",
+    "assessment_date_unreadable": "assessment date unreadable",
+    "assessment_duration_unreadable": "assessment duration unreadable",
+}
+
+
+def _labels(codes: list[str]) -> str:
+    return ", ".join(FINDING_LABELS.get(code, code) for code in codes)
+
+
 class Decision(NamedTuple):
     proposed: VerdictLabel | None
     request_further_review: bool
@@ -201,30 +227,33 @@ def decide(
     total: int | None, findings: list[Finding], concerns: list[ConcernResult], unverified: int,
     schema_valid: bool, rule: DecisionRule,
 ) -> Decision:
-    """Règle explicite : décision proposée (trois valeurs ou aucune) et revue complémentaire."""
+    """Règle explicite : décision proposée (trois valeurs ou aucune) et revue complémentaire.
+
+    Les textes (règle, raisons) s'affichent aux évaluateurs : ils sont en anglais.
+    """
     exclusions = sorted({f.code for f in findings if f.severity == "alert" and f.code in rule.exclusion_codes})
     others = sorted({f.code for f in findings if f.code not in exclusions})
     reasons: list[str] = []
     if rule.review_on_findings and others:
-        reasons.append(f"constats signalés ({', '.join(others)})")
+        reasons.append(f"Flagged checks: {_labels(others)}")
     if rule.review_on_concerns and concerns:
-        reasons.append(f"Concerns ({', '.join(sorted({c.key for c in concerns}))})")
+        reasons.append(f"Concerns: {', '.join(sorted({c.name for c in concerns}))}")
     if schema_valid and unverified > rule.max_unverified_quotes:
-        reasons.append(f"{unverified} citation(s) introuvable(s) mot pour mot")
+        reasons.append(f"{unverified} quote{'s' if unverified > 1 else ''} not found word for word in the application")
     if not schema_valid or total is None:
-        reasons.append("pas de réponse conforme du modèle")
+        reasons.append("No valid answer from the model")
 
     if exclusions:
         return Decision("Interview Reject", bool(reasons),
-                        f"Candidature écartée par le guide ({', '.join(exclusions)}).", reasons)
+                        f"Excluded by the evaluation guide: {_labels(exclusions)}.", reasons)
     if not schema_valid or total is None:
-        return Decision(None, True, "Aucune note exploitable : aucune décision proposée.", reasons)
+        return Decision(None, True, "No usable scores, so no decision is proposed.", reasons)
     if total >= rule.invite_min:
-        proposed, text = "Interview Invitation", f"Total {total} ≥ {rule.invite_min}."
+        proposed, text = "Interview Invitation", f"Total {total} is at least {rule.invite_min}."
     elif total >= rule.waitlist_min:
-        proposed, text = "Waitlist", f"Total {total} entre {rule.waitlist_min} et {rule.invite_min - 1}."
+        proposed, text = "Waitlist", f"Total {total} is between {rule.waitlist_min} and {rule.invite_min - 1}."
     else:
-        proposed, text = "Interview Reject", f"Total {total} < {rule.waitlist_min}."
+        proposed, text = "Interview Reject", f"Total {total} is below {rule.waitlist_min}."
     return Decision(proposed, bool(reasons), text, reasons)
 
 

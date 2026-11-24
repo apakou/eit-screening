@@ -277,7 +277,7 @@ def test_duration_threshold(minutes, flagged):
         (finding,) = match.findings
         assert finding.severity == "to_check"
         assert {e.question for e in finding.evidence} == {"duration", "score_percent"}
-        assert all(e.source == "assessment_results.csv, ligne 2" for e in finding.evidence)
+        assert all(e.source == "assessment_results.csv, row 2" for e in finding.evidence)
 
 
 def test_unreadable_date():

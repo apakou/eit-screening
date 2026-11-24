@@ -37,7 +37,7 @@ from rapidfuzz import fuzz
 
 from .. import __version__
 from ..models import Application
-from .common import SEVERITY_LABELS, Evidence, Finding, git_commit, plain_text
+from .common import SEVERITY_LABELS, Evidence, Finding, day, git_commit, plain_text
 
 # --------------------------------------------------------------------------
 # Configuration
@@ -347,7 +347,7 @@ class MatchingResult(BaseModel):
 
 
 def _source(export_name: str, row: AssessmentRow) -> str:
-    return f"{export_name}, ligne {row.line}"
+    return f"{export_name}, row {row.line}"
 
 
 def _cell(row: AssessmentRow, field: str, column: str, export_name: str) -> Evidence:
@@ -395,7 +395,7 @@ def _row_findings(row: AssessmentRow, config: AssessmentConfig, export_name: str
             Finding(
                 code="assessment_date_unreadable",
                 severity="to_check",
-                message="Date de fin du test absente ou illisible : le respect de la date limite ne peut pas être contrôlé.",
+                message="Assessment completion date missing or unreadable: the deadline cannot be checked.",
                 evidence=[completed],
             )
         )
@@ -406,8 +406,8 @@ def _row_findings(row: AssessmentRow, config: AssessmentConfig, export_name: str
                 code="assessment_late",
                 severity="to_check",
                 message=(
-                    f"Test soumis le {gmt:%d/%m/%Y à %H:%M} GMT, après la date limite du "
-                    f"{deadline.astimezone(timezone.utc):%d/%m/%Y à %H:%M} GMT."
+                    f"Assessment submitted on {day(gmt)} at {gmt:%H:%M} GMT, after the deadline of "
+                    f"{day(deadline.astimezone(timezone.utc))} at {deadline.astimezone(timezone.utc):%H:%M} GMT."
                 ),
                 evidence=[completed],
             )
@@ -421,19 +421,19 @@ def _row_findings(row: AssessmentRow, config: AssessmentConfig, export_name: str
             Finding(
                 code="assessment_duration_unreadable",
                 severity="to_check",
-                message="Durée du test absente ou illisible.",
+                message="Assessment duration missing or unreadable.",
                 evidence=[duration],
             )
         )
     elif row.time_taken_minutes < rule.min_minutes:
-        score_text = "illisible" if row.score_percent is None else f"{row.score_percent:g} %"
+        score_text = "unreadable" if row.score_percent is None else f"{row.score_percent:g}%"
         findings.append(
             Finding(
                 code="assessment_too_fast",
                 severity="to_check",
                 message=(
-                    f"Test terminé en {row.time_taken_minutes:.1f} minutes sur {rule.allotted_minutes:g} prévues "
-                    f"(seuil : {rule.min_minutes:g} minutes), avec un score de {score_text}."
+                    f"Assessment completed in {row.time_taken_minutes:.1f} of {rule.allotted_minutes:g} minutes "
+                    f"(threshold: {rule.min_minutes:g} minutes), with a score of {score_text}."
                 ),
                 evidence=[duration, score],
             )
@@ -505,8 +505,8 @@ def match_assessments(
                         code="assessment_multiple_results",
                         severity="to_check",
                         message=(
-                            f"{len(own)} lignes de l'export correspondent à ce dossier ; "
-                            f"la plus ancienne (ligne {row.line}) est retenue pour les contrôles."
+                            f"{len(own)} rows of the assessment export match this application; "
+                            f"the earliest (row {row.line}) is used for the checks."
                         ),
                         evidence=[e for other, _ in own for e in _row_identity(other, columns, export_name)],
                     )
@@ -517,8 +517,8 @@ def match_assessments(
                     code="assessment_match_ambiguous",
                     severity="to_check",
                     message=(
-                        f"La ligne {row.line} de l'export pourrait correspondre à ce dossier comme à un autre : "
-                        "elle n'a été rattachée à aucun des deux."
+                        f"Row {row.line} of the assessment export could belong to this application or to another one: "
+                        "it was attached to neither."
                     ),
                     evidence=_row_identity(row, columns, export_name),
                 )
@@ -532,7 +532,7 @@ def match_assessments(
                 Finding(
                     code="assessment_not_found",
                     severity="alert",
-                    message="Aucune ligne de l'export du test ne correspond à ce dossier (ni l'e-mail, ni le nom).",
+                    message="No row of the assessment export matches this application (neither email nor name).",
                     evidence=evidence,
                 )
             )
